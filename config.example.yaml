@@ -22,6 +22,15 @@ search_queries:
   - "Senior Widget Engineer remote"
   - "Director of Widgets remote"
 
+# Optional override for the query set the server-side-search ATS scrapers
+# (Workday, Eightfold) use. When unset, they search each tenant with
+# profile.target_titles + local_target_titles — NOT the LinkedIn-phrased
+# search_queries above, whose " remote" suffix returns ~0 from a tenant's own
+# search box. Set this only to trim or specialize those searches (fewer
+# queries = fewer requests per tenant).
+# ats_search_queries:
+#   - "Widget Engineer"
+
 scoring:
   # Blended score at/above this counts as a match (alerts, dashboard tier).
   alert_threshold: 60
@@ -78,6 +87,8 @@ workday_tenants: []
 #    tenant_url: example.wd5.myworkdayjobs.com
 #    company_slug: example
 #    site_path: ExampleCareers
+#    local: true   # commuter-area tenant: adds one empty-search pass keeping
+#                  # local-area, title-passing roles the query passes missed
 
 # Eightfold: career sites on {subdomain}.eightfold.ai (or a custom base_url).
 # verify: curl -s "https://{subdomain}.eightfold.ai/api/apply/v2/jobs?domain={domain}&query=&start=0&num=10" | grep -c '"id"'  → >0
