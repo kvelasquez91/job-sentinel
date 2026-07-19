@@ -1,9 +1,22 @@
 """Location gate: non-remote, non-local-area jobs are pre-filtered before
 any LLM call (cap 10 <= 15 means _score_one_job hard-skips the CLI)."""
+import pytest
+
 import engine.llm_scorer as llm_scorer
 from engine.llm_scorer import prefilter_job
 from local_area import build_local_area_regex
 from policy_fixtures import patch_pm_prefilter, patch_relocation_exception
+
+
+@pytest.fixture(autouse=True)
+def _config_agnostic_gate(monkeypatch):
+    """Every test here asserts gate verdicts on fixture titles/cities, so pin
+    the PM-shaped prefilter AND a no-local-area baseline — a personalized
+    config.yaml (e.g. one whose non_target_titles caps "product manager", or
+    whose local_locations contains a fixture city) must not leak in. Tests
+    that exercise local-area behavior override _LOCAL_AREA_RE themselves."""
+    patch_pm_prefilter(monkeypatch)
+    monkeypatch.setattr(llm_scorer, "_LOCAL_AREA_RE", None)
 
 _PM_TITLE = "Senior Product Manager, AI Platforms"
 _DESC = "Lead our AI product roadmap. " * 30  # no remote words
@@ -70,10 +83,9 @@ def test_non_local_area_city_is_gated(monkeypatch):
     assert _cap("Chicago, IL") == 10
 
 
-def test_more_severe_title_rules_still_win(monkeypatch):
+def test_more_severe_title_rules_still_win():
     # A nurse posting in Tarrytown reports the non-PM reason (cap 5), not
     # the location reason — title rules run first.
-    patch_pm_prefilter(monkeypatch)
     cap, reason = prefilter_job("Registered Nurse", "Tarrytown, NY", _DESC)
     assert cap == 5
     assert "non-PM" in reason
@@ -127,9 +139,8 @@ def test_low_comp_us_city_still_gated(monkeypatch):
     assert cap == 10
 
 
-def test_high_comp_does_not_rescue_title_rules(monkeypatch):
+def test_high_comp_does_not_rescue_title_rules():
     # A $400K nurse posting still dies on the non-PM title rule (step 1).
-    patch_pm_prefilter(monkeypatch)
     cap, reason = prefilter_job("Registered Nurse", "Tarrytown, NY", _DESC,
                                 salary_min=400_000, salary_max=500_000)
     assert cap == 5
