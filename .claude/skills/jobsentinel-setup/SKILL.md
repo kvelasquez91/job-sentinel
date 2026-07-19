@@ -85,19 +85,21 @@ the database). Optional resume tailoring: SETUP.md §9 (Google OAuth), then
 (master_title_line must be byte-exact from their master doc).
 
 ## 6. Schedule
-Ask: how often to run? macOS: instantiate both plist templates with SETUP.md
-§8's snippet (agent labels and log paths get suffixed with profile.key, so a
-second checkout/profile never overwrites an existing install's agents; the
-snippet's guard also refuses plists that belong to a different checkout); for
-non-default times, edit the Hour/Minute dicts in
-`com.jobsentinel.daily.plist.template` first (the dashboard template has no
-schedule — it runs continuously via RunAtLoad+KeepAlive). Offer to run it.
-Linux: emit the cron line from SETUP.md §8 with their times.
+Ask: how often to run? Write the times to `schedule.daily_times` in
+config.yaml (24h "HH:MM" strings; omit the key for the 02:30/13:00 default)
+— NEVER edit the tracked plist templates. macOS: then run SETUP.md §8's
+snippet (scripts/render_launchd.py + launchctl; agent labels and log paths
+get suffixed with profile.key, so a second checkout/profile never overwrites
+an existing install's agents, and foreign-checkout plists are refused; the
+dashboard agent has no schedule — it runs continuously via
+RunAtLoad+KeepAlive). Offer to run it. Linux: emit the cron line from
+SETUP.md §8 with their times.
 
 ## 7. Verify
 Run `python -m pytest -q` → must be green. First run: confirm
 `linkedin_max_pages: 1`, then `python main.py --scrape-only` (NEVER
 `--dry-run` first — it skips DB dedup and is the heaviest LinkedIn
-footprint). Then `python main.py --dashboard` → http://127.0.0.1:8500 —
-walk the owner through the chips/filters they configured. After a good first
+footprint). Then `python main.py --dashboard` → http://127.0.0.1:<dashboard.
+port from config.yaml, 8500 by default — pick a free port there if 8500 is
+taken> — walk the owner through the chips/filters they configured. After a good first
 run, raise `linkedin_max_pages` to 3.
