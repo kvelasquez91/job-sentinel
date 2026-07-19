@@ -37,6 +37,19 @@ this page is the human-readable version for doing it by hand.
    customization into `config.yaml` where it belongs, since that's what the
    `policy:` schema in CUSTOMIZING.md exists for.
 
+**One-time launchd migration (July 2026).** Agent labels and log paths are now
+suffixed with your `profile.key` (`com.jobsentinel.<key>.daily` /
+`.dashboard`), so multiple checkouts or profiles on one machine can't
+overwrite each other's agents. If you loaded agents under the old shared
+labels, retire them once and re-run SETUP.md §8:
+
+```bash
+launchctl bootout "gui/$(id -u)/com.jobsentinel.daily" 2>/dev/null
+launchctl bootout "gui/$(id -u)/com.jobsentinel.dashboard" 2>/dev/null
+rm -f ~/Library/LaunchAgents/com.jobsentinel.daily.plist \
+      ~/Library/LaunchAgents/com.jobsentinel.dashboard.plist
+```
+
 One more thing worth knowing: `origin` is read-only for you — you don't have
 push access to the upstream repository, and updates only ever flow one way
 (pull, never push). If you want your own remote backup of your fork plus

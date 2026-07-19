@@ -109,26 +109,40 @@ Run all commands from the repo root — config paths are resolved relative to it
 ## 8. Automation (macOS)
 
 Two launchd agents ship as templates: one for the twice-daily scrape/score run,
-one to keep the dashboard always running. Instantiate and load both with:
+one to keep the dashboard always running. Agent labels and log paths are
+suffixed with your `profile.key` (from `config.yaml`), so a second checkout or
+profile on the same machine gets its own agents instead of silently re-pointing
+an existing install's — the guard in the loop below refuses to overwrite an
+agent that belongs to a different checkout. (`profile.key` must be a plain
+slug — letters, digits, dots, dashes, underscores; the setup interview writes
+one.) Instantiate and load both with:
 
 ```bash
 REPO_DIR="$(pwd)"; CLAUDE_DIR="$(dirname "$(which claude)")"
-mkdir -p ~/Library/Logs/job-sentinel
-for t in com.jobsentinel.daily com.jobsentinel.dashboard; do
+PROFILE_KEY="$(./venv/bin/python -c "import yaml; print((yaml.safe_load(open('config.yaml')) or {}).get('profile', {}).get('key', 'default'))")"
+mkdir -p ~/Library/Logs/job-sentinel/"$PROFILE_KEY"
+for t in daily dashboard; do
+  label="com.jobsentinel.$PROFILE_KEY.$t"
+  dest="$HOME/Library/LaunchAgents/$label.plist"
+  if [ -e "$dest" ] && ! grep -qF "$REPO_DIR" "$dest"; then
+    echo "skipping $label — $dest belongs to a different checkout"; continue
+  fi
   sed -e "s|__REPO_DIR__|$REPO_DIR|g" -e "s|__HOME__|$HOME|g" \
-      -e "s|__CLAUDE_DIR__|$CLAUDE_DIR|g" \
-      "$t.plist.template" > ~/Library/LaunchAgents/"$t.plist"
-  launchctl bootout "gui/$(id -u)/$t" 2>/dev/null || true
-  launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/"$t.plist"
+      -e "s|__CLAUDE_DIR__|$CLAUDE_DIR|g" -e "s|__PROFILE_KEY__|$PROFILE_KEY|g" \
+      "com.jobsentinel.$t.plist.template" > "$dest"
+  launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+  launchctl bootstrap "gui/$(id -u)" "$dest"
 done
 ```
 
-Run this from the repo root (`REPO_DIR="$(pwd)"` needs it). The dashboard agent
-uses `RunAtLoad` + `KeepAlive`, so once loaded you never need to start
-`--dashboard` manually again — it just stays up. Non-default run times: edit
-the Hour/Minute integers in `com.jobsentinel.daily.plist.template`'s
-`StartCalendarInterval` before running the sed above (the dashboard template
-has no schedule to edit — it's the always-on one).
+Run this from the repo root (`REPO_DIR="$(pwd)"` needs it, and the venv python
+reads `config.yaml` there). The dashboard agent uses `RunAtLoad` + `KeepAlive`,
+so once loaded you never need to start `--dashboard` manually again — it just
+stays up. Non-default run times: edit the Hour/Minute integers in
+`com.jobsentinel.daily.plist.template`'s `StartCalendarInterval` before running
+the sed above (the dashboard template has no schedule to edit — it's the
+always-on one). Upgrading from agents installed before labels were
+per-profile? See the one-time migration note in UPDATING.md.
 
 **Linux alternative** (no launchd — use cron):
 
