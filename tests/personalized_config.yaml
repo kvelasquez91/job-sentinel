@@ -1,0 +1,214 @@
+# Adversarial personalized config — CI fixture, FICTIONAL persona.
+#
+# CUSTOMIZING.md promises: "follow the setup interview → `pytest` is green"
+# for every personalized fork. This file is the enforcement of that promise:
+# CI copies it to config.yaml and runs the full suite against it. Every value
+# is chosen to be maximally hostile to config-leaking tests while staying a
+# legal, interview-shaped personalization:
+#
+#   - prefilter.non_target_titles caps "product manager" — the exact term that
+#     breaks any test using PM-titled fixtures against ambient config
+#   - local_locations deliberately contains the cities test fixtures assert
+#     location-gate verdicts on (Tarrytown, New York, San Francisco, Austin),
+#     so any test reading the ambient local-area matcher instead of pinning it
+#     goes red here
+#   - comp.relocation_exception is NOT the default $300K, so any test assuming
+#     the generic band without patch_relocation_exception goes red here
+#   - all four policy.rubric.*_block keys are overridden
+#
+# If a change turns this leg red but the example-config leg green, the change
+# (or a test) is reading owner config where it should be config-agnostic.
+# Do NOT "fix" a failure by softening this file — pin the test instead
+# (see tests/policy_fixtures.py).
+
+profile:
+  key: ci-adversarial
+  target_titles:
+    - "Senior Welding Engineer"
+    - "Principal Materials Engineer"
+    - "Corrosion Engineer"
+    - "Metallurgical Engineering Manager"
+
+search_queries:
+  - "Senior Welding Engineer remote"
+  - "Materials Engineer remote"
+
+scoring:
+  alert_threshold: 60
+  layoff_penalty: 5
+
+scraping:
+  max_results_per_source: 50
+  rate_limit_seconds: 2
+
+# Hostile on purpose: cities test fixtures assert gate verdicts on.
+local_locations:
+  - "Tarrytown"
+  - "New York"
+  - "San Francisco"
+  - "Austin"
+  - "Charlotte"
+
+wttj_enabled: true
+wttj_queries:
+  - "Welding Engineer"
+  - "Materials Engineer"
+
+hn_whoishiring_enabled: true
+
+dashboard:
+  port: 8500
+  host: "127.0.0.1"
+  page_title: "Job Sentinel — CI Adversarial Fixture"
+  comp_tiers: [140000, 160000, 180000]
+  profiles:
+    ci-adversarial:
+      label: "CI Fixture"
+      subtitle: "Fictional adversarial personalization"
+
+workday_tenants: []
+eightfold_tenants: []
+smartrecruiters_companies: []
+successfactors_tenants: []
+local_target_titles:
+  - "Welding Engineer"
+  - "Materials Engineer"
+greenhouse_slugs: {}
+lever_slugs: {}
+ashby_slugs: {}
+linkedin_max_pages: 1
+linkedin_seniority_facet_queries: []
+linkedin_company_search_queries: []
+linkedin_company_searches: {}
+local_search_queries:
+  - "Senior Welding Engineer"
+linkedin_local_company_searches: {}
+
+llm_scoring:
+  model: claude-sonnet-5
+  workers: 2
+  overlap_scrape: true
+  streaming_reserve: 50
+  max_jobs_per_run: 100
+  judge_min_score: 40
+  keyword_weight: 0.4
+  llm_weight: 0.6
+  resume_summary: >-
+    FICTIONAL CI PERSONA — Avery Quill, senior welding/materials engineer.
+    12 years in fabrication and materials consulting. Targets senior/principal
+    materials, welding, and corrosion engineering roles. Lives in New York;
+    local-first with the commuter cities configured above; remote US acceptable;
+    will not relocate below $260K. Salary floor $140K local / $150K remote.
+    This summary exists so the personalized-fork CI leg exercises a fully
+    interview-shaped config; it describes nobody real.
+
+auto_tailor:
+  enabled: false
+  min_score: 85
+  min_filter_score: 60
+  max_per_run: 2
+  workers: 1
+
+retention:
+  expired_days: 180
+
+policy:
+  geography:
+    local_state_pattern: "new york|\\bny\\b|california|\\bca\\b|texas|\\btx\\b|north carolina|\\bnc\\b"
+    linkedin_local_geo: "New York City Metropolitan Area"
+    rubric_local_area_prose: "the fictional CI commuter area (Tarrytown, New York, San Francisco, Austin, Charlotte)"
+    rubric_local_area_short: "the fictional CI commuter area"
+    rubric_local_anchor: "CI-fixture local senior role"
+  comp:
+    target: 175000
+    local_full: 140000
+    local_partial: 115000
+    remote_partial: 150000
+    cap_low: 135000
+    cap_mid: 160000
+    relocation_exception: 260000   # deliberately NOT the generic $300K
+  keywords:
+    primary:
+      - "welding"
+      - "metallurgy"
+      - "corrosion"
+      - "materials engineering"
+      - "asme"
+    secondary:
+      - "ndt"
+      - "aws d1.1"
+      - "failure analysis"
+      - "heat treatment"
+  companies:
+    high_paying: ["fictional-forge"]
+    priority: ["fictional-forge", "example-alloys"]
+  title_gates:
+    baseline:
+      - "welding engineer"
+      - "materials engineer"
+      - "corrosion engineer"
+      - "metallurg"
+    domain:
+      - "welding"
+      - "materials"
+      - "corrosion"
+  wttj:
+    title_keywords:
+      - "welding engineer"
+      - "materials engineer"
+    default_queries:
+      - "Welding Engineer"
+  hn:
+    role_pattern: "(welding|materials|corrosion) engineer"
+    remote_only: true
+  prefilter:
+    # "product manager" here is the load-bearing adversarial term — it is the
+    # regression that motivated this fixture (PM-titled test fixtures vs
+    # ambient config). Do not remove it.
+    non_target_titles: "\\b(recruiter|talent acquisition|attorney|nurse|accountant|marketing|software (engineer|developer)|data (scientist|analyst)|scrum master|product manager)\\b"
+    sales_bd_titles: "\\b(sales|business development|account (executive|manager))\\b"
+    solutions_cs_titles: "\\b(customer success|pre-?sales|sales engineer)\\b"
+    eng_title_keywords: "\\b(engineer|engineering)\\b"
+    non_target_adjacent_titles: "\\b(electrical|civil|software|network)\\s+engineer\\b"
+    target_keywords: "\\b(welding|materials|corrosion|metallurg)\\b"
+    domain_signal_pattern: "welding|metallurg|corrosion|materials engineering|asme|heat treat|failure analysis"
+  tailor:
+    master_title_line: "SENIOR WELDING ENGINEER | MATERIALS & FABRICATION"
+    skill_subcategory_labels: {}
+    extra_ats_headers: []
+  rubric:
+    role_match_block: |-
+      1. role_match (0-30): Does this job match the candidate's target role family — welding, materials, and corrosion engineering (see CANDIDATE PROFILE above)?
+         - 25-30: Title and focus are squarely welding/materials/corrosion engineering at the candidate's target level
+         - 15-24: Adjacent role — same discipline, different specialization
+         - 5-14: Loosely related — overlapping skills but a different discipline
+         - 0-4: A different profession entirely
+
+         IMPORTANT: Judge the ROLE being hired for, not whether the candidate could stretch into it. When title and description disagree, weigh the description.
+    seniority_match_block: |-
+      2. seniority_match (0-20): Does the job's seniority match the level the candidate targets (see CANDIDATE PROFILE)?
+
+         Score based on the ACTUAL TITLE of the role being posted, not the candidate's seniority:
+         - 18-20: At or above the candidate's target seniority
+         - 12-17: One step below the candidate's target
+         - 8-11: Two steps below the target
+         - 4-7: Mid-level IC roles when the candidate targets senior or leadership roles
+         - 0-3: Junior, associate, entry-level, new-grad, or intern roles
+
+         IMPORTANT: A bare "Manager" title with no seniority qualifier is mid-level, not leadership.
+    remote_location_block: |-
+      3. remote_location (0-20): Is this remote-friendly, US-based, or in the candidate's local commuter area?
+         - 18-20: Fully remote (US), remote-first, OR located in/near %%LOCAL_AREA_PROSE%%
+         - 12-17: Hybrid US or remote with US restriction
+         - 5-11: In-office only but major US city
+         - 0-4: Non-US location or in-office non-US
+         EXCEPTION: an in-office/hybrid US role whose posted salary (see the Salary line) has a top-of-band >= %%EXCEPTION_COMP%% scores 12-17, not 5-11 — the candidate will relocate within the US for %%EXCEPTION_COMP_K%%+ comp. Never apply this to non-US locations.
+    domain_fit_block: |-
+      4. ai_domain_fit (0-20): Does the JOB DESCRIPTION explicitly involve the candidate's target domain (see CANDIDATE PROFILE)?
+
+         CRITICAL RULE: Score this dimension solely on the JOB DESCRIPTION's content — NOT on the candidate's background. If the description shows no explicit signal of the candidate's target domain (welding, metallurgy, corrosion, materials engineering), the score MUST be 8 or below regardless of the candidate's qualifications. (The JSON key stays "ai_domain_fit" for schema compatibility; it measures domain fit generally.)
+
+         - 17-20: The candidate's target domain is central to the role
+         - 11-16: The description explicitly involves the domain as a significant part of the role
+         - 5-10: Same broad industry, but no explicit signal of the target domain
+         - 0-4: An unrelated domain with no connection to the candidate's target

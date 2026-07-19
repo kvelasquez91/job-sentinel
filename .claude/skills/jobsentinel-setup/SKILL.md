@@ -92,7 +92,9 @@ schedule — it runs continuously via RunAtLoad+KeepAlive). Offer to run it.
 Linux: emit the cron line from SETUP.md §8 with their times.
 
 ## 7. Verify
-Run `python -m pytest -q` → must be green. First run: confirm
+Run `python -m pytest -q` → must be green (the pass/skip split shifts by a
+few tests vs a fresh clone — owner-guard tests self-skip or engage per
+config; that's fine, failures are not). First run: confirm
 `linkedin_max_pages: 1`, then `python main.py --scrape-only` (NEVER
 `--dry-run` first — it skips DB dedup and is the heaviest LinkedIn
 footprint). Then `python main.py --dashboard` → http://127.0.0.1:8500 —

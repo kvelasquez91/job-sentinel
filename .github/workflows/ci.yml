@@ -3,11 +3,22 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          # Fresh-clone defaults (SETUP.md §2).
+          - config.example.yaml
+          # Adversarial personalized fork — enforces CUSTOMIZING.md's promise
+          # that the suite stays green after the setup interview. See the
+          # fixture's header before touching it.
+          - tests/personalized_config.yaml
+    name: test (${{ matrix.config }})
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
-      - run: cp config.example.yaml config.yaml
+      - run: cp "${{ matrix.config }}" config.yaml
       - run: python -m pytest -q

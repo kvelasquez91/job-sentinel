@@ -62,7 +62,11 @@ dashboard:
 
 # --- ATS tenants: find your target companies' career systems -----------------
 # Workday: careers page URL like https://{slug}.wd5.myworkdayjobs.com/{site}
-# verify: POST https://{tenant_url}/wday/cxs/{slug}/{site_path}/jobs returns JSON
+# verify (needs the JSON body — a bare POST is rejected):
+#   curl -s -X POST "https://{tenant_url}/wday/cxs/{slug}/{site_path}/jobs" \
+#     -H "Content-Type: application/json" \
+#     -d '{"appliedFacets":{},"limit":1,"offset":0,"searchText":""}'
+#   → JSON starting {"total": N, "jobPostings": ...} means the tenant is right
 workday_tenants: []
 #  - company: Example Corp
 #    tenant_url: example.wd5.myworkdayjobs.com
@@ -72,6 +76,10 @@ workday_tenants: []
 # Eightfold: career sites on {subdomain}.eightfold.ai (or a custom base_url).
 # verify: curl -s "https://{subdomain}.eightfold.ai/api/apply/v2/jobs?domain={domain}&query=&start=0&num=10" | grep -c '"id"'  → >0
 eightfold_tenants: []
+#  - company: Example Corp
+#    subdomain: example            # portal at {subdomain}.eightfold.ai …
+#    domain: example.com           # passed as the API's `domain` param
+#    base_url: https://jobs.example.com   # optional: overrides subdomain for custom hosts
 
 # SmartRecruiters: https://api.smartrecruiters.com/v1/companies/{company_id}/postings
 # verify: curl -s "https://api.smartrecruiters.com/v1/companies/{company_id}/postings?limit=1" | grep -o '"totalFound":[0-9]*'
@@ -85,6 +93,8 @@ smartrecruiters_companies: []
 # SAP SuccessFactors Career Site Builder:
 # verify: curl -s "{base_url}/search/?q=&sortColumn=referencedate&sortDirection=desc&startrow=0" | grep -c data-row  → >0
 successfactors_tenants: []
+#  - company: Example Corp
+#    base_url: https://jobs.examplecorp.com
 
 # Broadened LOCAL titles (only used when local_locations is non-empty).
 local_target_titles: []

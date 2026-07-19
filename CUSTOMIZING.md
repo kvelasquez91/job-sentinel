@@ -156,6 +156,14 @@ should leave them off — the suite (`python -m pytest -q`) stays green whether
 or not you set them. They exist only for a maintainer who wants their own
 tuning guarded against silent drift.
 
+Note that the pass/skip split shifts by a few tests between a fresh clone and
+a personalized one (e.g. 753 passed / 3 skipped → 752 passed / 4 skipped):
+a handful of owner-guard tests self-skip or engage depending on which config
+keys you set. That's by design — the total count stays the same, and **no
+test may fail** either way. CI enforces this with a second leg that runs the
+whole suite against `tests/personalized_config.yaml`, an adversarial
+interview-shaped config.
+
 | Key | What it does | When a maintainer sets it |
 |---|---|---|
 | `policy.owner_pins.rubric_sha` | sha256 of your **assembled** fit-scoring system template (rubric blocks + comp/geography tokens, as rendered). Non-empty makes the byte-identity guard test assert the live template hashes to it; empty (default) skips that guard. | Once your rubric wording is tuned and you want CI to catch any later edit that would silently re-roll the non-deterministic LLM judge or break the `claude` CLI prompt-cache prefix. |
