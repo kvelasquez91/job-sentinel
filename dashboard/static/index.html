@@ -1,0 +1,3811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Sentinel</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #263347;
+    --border: #334155;
+    --border-light: #3d5068;
+    --text: #e2e8f0;
+    --text-muted: #94a3b8;
+    --text-faint: #64748b;
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --green: #22c55e;
+    --yellow: #eab308;
+    --gray: #64748b;
+    --red: #ef4444;
+    --orange: #f97316;
+    --radius: 8px;
+    --radius-sm: 4px;
+    --shadow: 0 4px 20px rgba(0,0,0,0.4);
+    --transition: 0.15s ease;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* Layout */
+  #app {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  #header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  }
+
+  #header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, var(--accent), #6366f1);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  .logo-text {
+    font-size: 18px;
+    font-weight: 700;
+    color: #f1f5f9;
+    letter-spacing: -0.5px;
+  }
+
+  .logo-subtitle {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 1px;
+  }
+
+  #header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  #last-updated {
+    font-size: 12px;
+    color: var(--text-faint);
+  }
+
+  .btn {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 7px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background var(--transition);
+    white-space: nowrap;
+  }
+
+  .btn:hover { background: var(--accent-hover); }
+  .btn:active { opacity: 0.9; }
+
+  .btn-sm {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+  .btn-ghost:hover { background: var(--surface2); border-color: var(--border-light); }
+
+  /* Profile selector */
+  #profile-select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 28px 5px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2394a3b8'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    transition: border-color var(--transition);
+  }
+  #profile-select:focus { border-color: var(--accent); }
+
+  /* Main content */
+  #main {
+    flex: 1;
+    padding: 24px;
+    max-width: 1600px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  /* Stats row */
+  #stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+  }
+
+  .stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: #f1f5f9;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .stat-label {
+    font-size: 12px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .stat-card.accent .stat-value { color: var(--accent); }
+  .stat-card.green .stat-value { color: var(--green); }
+  .stat-card.yellow .stat-value { color: var(--yellow); }
+
+  /* Filter bar */
+  #filter-bar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .filter-label {
+    font-size: 12px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+  }
+
+  .filter-group {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .filter-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all var(--transition);
+    white-space: nowrap;
+  }
+
+  .filter-btn:hover {
+    background: var(--surface2);
+    border-color: var(--border-light);
+    color: var(--text);
+  }
+
+  .filter-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+    font-weight: 500;
+  }
+
+  .filter-separator {
+    width: 1px;
+    height: 20px;
+    background: var(--border);
+    flex-shrink: 0;
+  }
+
+  #search-input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    outline: none;
+    width: 200px;
+    transition: border-color var(--transition);
+    margin-left: auto;
+  }
+
+  #search-input:focus { border-color: var(--accent); }
+  #search-input::placeholder { color: var(--text-faint); }
+
+  /* Auto-tailor header toggle + row failure badge */
+  #auto-tailor-toggle.off { opacity: 0.55; }
+  .auto-tailor-failed { color: #e6a700; cursor: help; margin-right: 2px; }
+
+  /* Jobs table */
+  #jobs-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  #jobs-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  #jobs-table th {
+    background: var(--bg);
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-faint);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  #jobs-table th:hover { color: var(--text-muted); }
+  #jobs-table th.sorted { color: var(--accent); }
+
+  #jobs-table td {
+    padding: 11px 14px;
+    border-bottom: 1px solid rgba(51,65,85,0.5);
+    vertical-align: middle;
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  #jobs-table tr:last-child td { border-bottom: none; }
+
+  #jobs-table tbody tr {
+    cursor: pointer;
+    transition: background var(--transition);
+  }
+
+  #jobs-table tbody tr:hover { background: var(--surface2); }
+  #jobs-table tbody tr.expanded { background: var(--surface2); }
+
+  /* Score badge */
+  .score-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 28px;
+    border-radius: 14px;
+    font-weight: 700;
+    font-size: 13px;
+    color: white;
+  }
+
+  .score-high { background: var(--green); }
+  .score-mid { background: var(--yellow); color: #1a1a1a; }
+  .score-low { background: var(--gray); }
+
+  /* Source badge */
+  .source-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .source-linkedin { background: #1d4ed8; color: #bfdbfe; }
+  .source-indeed { background: #1d4ed8; color: #bfdbfe; }
+  .source-greenhouse { background: #065f46; color: #a7f3d0; }
+  .source-lever { background: #7c3aed; color: #ddd6fe; }
+
+  /* Status select */
+  .status-select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2364748b'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 7px center;
+    padding-right: 22px;
+  }
+
+  .status-select:focus { border-color: var(--accent); }
+  .status-select.status-applied { color: var(--green); border-color: var(--green); }
+  .status-select.status-saved { color: var(--accent); border-color: var(--accent); }
+  .status-select.status-not_interested { color: var(--text-faint); }
+
+  /* Detail panel (expanded row) */
+  .detail-row td {
+    background: #1a2740;
+    padding: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .detail-panel {
+    padding: 20px 24px;
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 24px;
+  }
+
+  .detail-description {
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.75;
+    max-height: 380px;
+    overflow-y: auto;
+    padding-right: 8px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .detail-description p {
+    margin: 0 0 10px 0;
+  }
+
+  .detail-description p:last-child {
+    margin-bottom: 0;
+  }
+
+  .detail-description ul {
+    margin: 4px 0 10px 0;
+    padding-left: 18px;
+  }
+
+  .detail-description li {
+    margin-bottom: 3px;
+  }
+
+  .detail-description a {
+    color: var(--accent);
+    word-break: break-all;
+    font-size: 12px;
+  }
+
+  .detail-description::-webkit-scrollbar { width: 4px; }
+  .detail-description::-webkit-scrollbar-track { background: transparent; }
+  .detail-description::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .detail-meta {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+
+  .detail-meta h4 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-faint);
+    margin-bottom: 10px;
+  }
+
+  .meta-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 12px;
+  }
+
+  .meta-key { color: var(--text-faint); }
+  .meta-val { color: var(--text); font-weight: 500; text-align: right; }
+
+  .explanation-box {
+    background: rgba(59,130,246,0.08);
+    border: 1px solid rgba(59,130,246,0.2);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    margin-top: 12px;
+    font-size: 12px;
+    color: #93c5fd;
+    line-height: 1.6;
+    font-style: italic;
+  }
+
+  /* Empty state */
+  #empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--text-faint);
+  }
+
+  #empty-state .empty-icon { font-size: 48px; margin-bottom: 16px; }
+  #empty-state h3 { font-size: 18px; color: var(--text-muted); margin-bottom: 8px; }
+
+  /* Loading */
+  #loading {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-faint);
+  }
+
+  .spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin: 0 auto 12px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Toast notification */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--text);
+    box-shadow: var(--shadow);
+    z-index: 1000;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.25s ease;
+    max-width: 320px;
+  }
+
+  #toast.show {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  #toast.success { border-color: var(--green); }
+  #toast.error { border-color: var(--red); }
+
+  /* Salary display */
+  .salary-text {
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .salary-text.has-salary { color: var(--green); font-weight: 500; }
+
+  /* Job title link */
+  .job-title-text {
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .company-text {
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  /* Column widths */
+  .col-score { width: 70px; }
+  .col-filter { width: 70px; }
+  .ko-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    background: var(--red); color: #fff; font-weight: 700; font-size: 11px;
+  }
+  .gate-chip {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    background: transparent; color: var(--text-faint);
+    border: 1px solid var(--border); font-weight: 600; font-size: 11px;
+    cursor: help;
+  }
+  .col-title { min-width: 220px; }
+  .col-company { min-width: 140px; }
+  .col-location { min-width: 120px; }
+  .col-salary { min-width: 110px; }
+  .col-source { width: 90px; }
+  .col-date { width: 100px; }
+  .col-status { width: 130px; }
+  .col-actions { width: 110px; text-align: right; }
+
+  /* Tailor button */
+  .btn-tailor {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--accent);
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    line-height: 1;
+    transition: color var(--transition), border-color var(--transition), background var(--transition);
+    vertical-align: middle;
+  }
+  .btn-tailor:hover {
+    border-color: rgba(59,130,246,0.4);
+    background: rgba(59,130,246,0.08);
+  }
+  .btn-tailor-done {
+    display: inline-block;
+    color: var(--green);
+    font-size: 13px;
+    padding: 3px 6px;
+    vertical-align: middle;
+  }
+  .btn-tailor-error {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--red);
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    line-height: 1;
+    vertical-align: middle;
+    transition: border-color var(--transition), background var(--transition);
+  }
+  .btn-tailor-error:hover {
+    border-color: rgba(239,68,68,0.4);
+    background: rgba(239,68,68,0.08);
+  }
+  .btn-tailor-running {
+    display: inline-block;
+    color: var(--accent);
+    font-size: 13px;
+    padding: 3px 6px;
+    vertical-align: middle;
+    animation: spin 0.9s linear infinite;
+    cursor: default;
+  }
+
+  /* Tailor result panel (shown in expanded detail row) */
+  .tailor-panel {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    margin-top: 12px;
+  }
+  .tailor-panel h4 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-faint);
+    margin-bottom: 8px;
+  }
+  .tailor-panel-done  { border-color: rgba(34,197,94,0.3); }
+  .tailor-panel-error { border-color: rgba(239,68,68,0.3); }
+  .tailor-panel-running { border-color: rgba(59,130,246,0.3); }
+  .tailor-progress {
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .tailor-spinner {
+    display: inline-block;
+    animation: spin 0.9s linear infinite;
+    flex-shrink: 0;
+  }
+  .tailor-links { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+  .tailor-stats { margin-top: 8px; font-size: 12px; }
+  .tailor-issues { margin-top: 8px; }
+  .tailor-issue { font-size: 11px; color: #f87171; margin-bottom: 3px; line-height: 1.4; }
+  .tailor-error-msg { font-size: 12px; color: #f87171; margin-bottom: 6px; line-height: 1.4; }
+  .tailor-error-hint { font-size: 11px; color: var(--text-faint); margin-bottom: 8px; line-height: 1.5; }
+
+  /* Responsive */
+  @media (max-width: 1200px) {
+    #stats-row { grid-template-columns: repeat(2, 1fr); }
+    .col-source, .col-date { display: none; }
+    .col-health { display: none; }
+  }
+
+  @media (max-width: 768px) {
+    #main { padding: 16px; }
+    #stats-row { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .detail-panel { grid-template-columns: 1fr; }
+    .col-location { display: none; }
+    #search-input { width: 140px; }
+  }
+
+  /* Mobile sort bar: hidden on desktop; layout props defined here so display is the only override needed */
+  #mobile-sort-bar {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    margin-bottom: 16px;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* Sort pill direction indicator */
+  .msort-arrow {
+    font-size: 10px;
+    margin-left: 3px;
+    opacity: 0.7;
+  }
+
+  /* ── 640px: enable horizontal scroll on table container ── */
+  @media (max-width: 640px) {
+    #jobs-container {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+  }
+
+  /* ── 480px: card layout + full mobile treatment ── */
+  @media (max-width: 480px) {
+    /* Header */
+    #header { padding: 0 14px; }
+    .logo-subtitle { display: none; }
+    .logo-text { font-size: 16px; }
+    #last-updated { display: none; }
+
+    /* Stats */
+    #stats-row { gap: 10px; margin-bottom: 16px; }
+    .stat-card { padding: 12px 14px; }
+    .stat-value { font-size: 24px; }
+
+    /* Filter bar: stack vertically */
+    #filter-bar {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+      padding: 12px;
+    }
+    .filter-group { flex-wrap: wrap; gap: 6px; }
+    .filter-separator { display: none; }
+    #priority-filter-btn { align-self: flex-start; }
+    #search-input {
+      width: 100%;
+      margin-left: 0;
+      font-size: 16px; /* prevents iOS viewport zoom on focus */
+      padding: 10px 12px;
+    }
+
+    /* Mobile sort bar: shown as a pill strip on mobile */
+    #mobile-sort-bar { display: flex; }
+
+    /* Touch targets */
+    .filter-btn { padding: 10px 14px; font-size: 13px; }
+    .btn-sm { padding: 10px 14px; font-size: 13px; }
+    .status-select { min-height: 44px; padding: 10px 26px 10px 10px; font-size: 15px; }
+
+    /* ── Card layout: turn table rows into cards ── */
+    #jobs-table thead { display: none; }
+    #jobs-table,
+    #jobs-table tbody,
+    #jobs-table tr { display: block; width: 100%; }
+
+    #jobs-table tbody tr {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 10px;
+      padding: 12px;
+      background: var(--surface);
+      cursor: pointer;
+    }
+    #jobs-table tbody tr.session-divider {
+      border: none;
+      background: transparent;
+      padding: 2px 0 0;
+      margin-bottom: 6px;
+      cursor: default;
+    }
+    #jobs-table tbody tr.session-divider td::before { display: none; }
+    #jobs-table tbody tr.priority-row {
+      border-left: 3px solid #f59e0b;
+      background: rgba(245,158,11,0.04);
+    }
+    #jobs-table tbody tr:hover,
+    #jobs-table tbody tr.expanded { background: var(--surface2); }
+    #jobs-table tbody tr.priority-row:hover,
+    #jobs-table tbody tr.priority-row.expanded { background: rgba(245,158,11,0.09); }
+
+    #jobs-table td {
+      display: flex;
+      align-items: center;
+      padding: 5px 0;
+      border-bottom: 1px solid rgba(51,65,85,0.3);
+      font-size: 13px;
+      min-width: unset;
+      width: 100%;
+    }
+    #jobs-table td:last-child { border-bottom: none; }
+
+    /* Label from data-label attribute */
+    #jobs-table td::before {
+      content: attr(data-label);
+      min-width: 72px;
+      color: var(--text-faint);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      flex-shrink: 0;
+      margin-right: 10px;
+    }
+
+    /* Score: leads the card, no label */
+    #jobs-table td.col-score {
+      justify-content: flex-start;
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+    #jobs-table td.col-score::before { display: none; }
+
+    /* Actions: no label, right-aligned */
+    #jobs-table td.col-actions { justify-content: flex-end; }
+    #jobs-table td.col-actions::before { display: none; }
+
+    /* Status cell: align select with label */
+    #jobs-table td.col-status { align-items: center; }
+
+    /* Re-show all columns hidden at wider breakpoints — cards can show everything */
+    .col-source, .col-date, .col-health, .col-location, .col-salary {
+      display: flex !important;
+    }
+
+    /* Detail row: full-width block, no card chrome */
+    #jobs-table tr.detail-row {
+      padding: 0;
+      border: none;
+      border-radius: 0;
+      margin-bottom: 0;
+      background: transparent !important;
+    }
+    #jobs-table tr.detail-row td {
+      display: block;
+      width: 100%;
+      padding: 0;
+      border: none;
+    }
+    #jobs-table tr.detail-row td::before { display: none; }
+
+    /* Detail panel content */
+    .detail-panel { padding: 14px; gap: 16px; }
+    .detail-description { max-height: 220px; }
+    .explanation-box { font-size: 13px; }
+    .company-intel-panel { padding: 12px; }
+    .company-intel-panel h4 { word-break: break-word; }
+    .meta-val { text-align: left; word-break: break-word; }
+
+    /* Toast: full-width, above iOS home indicator */
+    #toast {
+      bottom: max(24px, env(safe-area-inset-bottom, 0px) + 10px);
+      right: 14px;
+      left: 14px;
+      max-width: unset;
+      text-align: center;
+    }
+  }
+
+  /* Company health badge */
+  /* Dismiss button */
+  .btn-dismiss {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-faint);
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    line-height: 1;
+    transition: color var(--transition), border-color var(--transition), background var(--transition);
+  }
+  .btn-dismiss:hover {
+    color: var(--red);
+    border-color: rgba(239,68,68,0.4);
+    background: rgba(239,68,68,0.08);
+  }
+
+  /* Dismissed job row */
+  tr.dismissed-row td { opacity: 0.45; }
+  tr.dismissed-row .btn-restore {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    line-height: 1;
+    transition: color var(--transition), border-color var(--transition);
+  }
+  tr.dismissed-row .btn-restore:hover {
+    color: var(--green);
+    border-color: rgba(34,197,94,0.4);
+  }
+
+  .health-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .health-strong  { background: rgba(34,197,94,0.15);  color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+  .health-stable  { background: rgba(59,130,246,0.12); color: #60a5fa; border: 1px solid rgba(59,130,246,0.25); }
+  .health-mixed   { background: rgba(234,179,8,0.12);  color: #eab308; border: 1px solid rgba(234,179,8,0.25); }
+  .health-caution { background: rgba(239,68,68,0.12);  color: #f87171; border: 1px solid rgba(239,68,68,0.25); }
+  .health-unknown { background: rgba(100,116,139,0.12);color: #94a3b8; border: 1px solid rgba(100,116,139,0.25); }
+
+  /* Company intel panel */
+  .company-intel-panel {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-top: 12px;
+  }
+  .company-intel-panel h4 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-faint);
+    margin-bottom: 10px;
+  }
+  .intel-summary {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+    line-height: 1.5;
+    font-style: italic;
+  }
+  .intel-flags {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 10px;
+  }
+  .intel-flag {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .flag-label {
+    flex-shrink: 0;
+    font-weight: 600;
+    min-width: 60px;
+  }
+  .flag-text { color: var(--text-muted); }
+  .flag-red   .flag-label { color: #f87171; }
+  .flag-yellow .flag-label { color: #eab308; }
+  .flag-green .flag-label { color: #22c55e; }
+  .flag-gray  .flag-label { color: var(--text-faint); }
+  .intel-headlines {
+    margin-top: 8px;
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+  }
+  .intel-headlines-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-faint);
+    margin-bottom: 5px;
+  }
+  .intel-headline-item {
+    font-size: 11px;
+    color: var(--text-faint);
+    line-height: 1.5;
+    padding: 2px 0;
+    border-left: 2px solid var(--border);
+    padding-left: 6px;
+    margin-bottom: 3px;
+  }
+  .intel-no-data {
+    font-size: 11px;
+    color: var(--text-faint);
+    font-style: italic;
+  }
+  .col-health { width: 90px; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+  /* ── Tailor History Panel ────────────────────────────────── */
+  #history-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 200;
+    backdrop-filter: blur(2px);
+  }
+  #history-overlay.open { display: flex; align-items: flex-start; justify-content: flex-end; }
+
+  #history-panel {
+    width: 860px;
+    max-width: 100vw;
+    height: 100vh;
+    background: var(--bg);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: -4px 0 32px rgba(0,0,0,0.5);
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+  }
+  #history-overlay.open #history-panel { transform: translateX(0); }
+
+  #history-panel-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  #history-panel-header h2 {
+    font-size: 15px;
+    font-weight: 600;
+    color: #f1f5f9;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #history-panel-header h2 span { color: var(--text-faint); font-size: 13px; font-weight: 400; }
+
+  #history-close-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    width: 30px;
+    height: 30px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition);
+  }
+  #history-close-btn:hover { background: var(--surface2); border-color: var(--border-light); color: var(--text); }
+
+  #history-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+  }
+
+  /* History list */
+  .history-empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-faint);
+  }
+  .history-empty .empty-icon { font-size: 40px; margin-bottom: 12px; }
+  .history-empty p { font-size: 13px; }
+
+  .history-loading {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-faint);
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .history-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    overflow: hidden;
+    transition: border-color var(--transition);
+  }
+  .history-item:hover { border-color: var(--border-light); }
+
+  .history-item-header {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .history-ats-badge {
+    width: 48px;
+    height: 32px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    color: white;
+    flex-shrink: 0;
+  }
+  .history-ats-high  { background: var(--green); }
+  .history-ats-mid   { background: var(--yellow); color: #1a1a1a; }
+  .history-ats-low   { background: var(--red); }
+
+  .history-item-title { font-size: 13px; font-weight: 500; color: var(--text); }
+  .history-item-company { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+  .history-item-meta {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .history-meta-pill {
+    font-size: 11px;
+    color: var(--text-faint);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+  .history-meta-pill strong { color: var(--text-muted); font-weight: 500; }
+
+  .history-item-date {
+    font-size: 11px;
+    color: var(--text-faint);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .history-chevron {
+    color: var(--text-faint);
+    font-size: 12px;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+  }
+  .history-item.expanded .history-chevron { transform: rotate(180deg); }
+
+  /* History detail */
+  .history-detail {
+    display: none;
+    border-top: 1px solid var(--border);
+    padding: 16px;
+    background: #1a2740;
+  }
+  .history-item.expanded .history-detail { display: block; }
+
+  .history-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 240px;
+    gap: 16px;
+  }
+
+  /* Section headers in detail */
+  .hd-section {
+    margin-bottom: 16px;
+  }
+  .hd-section-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-faint);
+    font-weight: 600;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Diff blocks */
+  .diff-block {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    font-size: 12px;
+  }
+  .diff-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-faint);
+    margin-bottom: 6px;
+  }
+  .diff-company-role {
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 500;
+    margin-bottom: 6px;
+  }
+  .diff-before {
+    color: #f87171;
+    line-height: 1.55;
+    margin-bottom: 6px;
+    padding: 5px 8px;
+    background: rgba(239,68,68,0.06);
+    border-radius: 3px;
+    border-left: 2px solid rgba(239,68,68,0.4);
+  }
+  .diff-after {
+    color: #86efac;
+    line-height: 1.55;
+    padding: 5px 8px;
+    background: rgba(34,197,94,0.06);
+    border-radius: 3px;
+    border-left: 2px solid rgba(34,197,94,0.4);
+  }
+  .diff-arrow {
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 14px;
+    margin: 4px 0;
+  }
+  .diff-keyword-added {
+    display: inline-block;
+    background: rgba(59,130,246,0.15);
+    color: #93c5fd;
+    border: 1px solid rgba(59,130,246,0.3);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 10px;
+    font-weight: 500;
+    margin-left: 4px;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  .diff-keywords-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+  }
+
+  .diff-skills-cat { font-size: 11px; color: var(--text-faint); margin-bottom: 3px; }
+  .diff-skills-val { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+
+  .diff-new-only {
+    color: #86efac;
+    line-height: 1.6;
+    padding: 5px 8px;
+    background: rgba(34,197,94,0.06);
+    border-radius: 3px;
+    border-left: 2px solid rgba(34,197,94,0.4);
+  }
+
+  /* ATS sidebar */
+  .ats-score-big {
+    font-size: 42px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .ats-score-big.high { color: var(--green); }
+  .ats-score-big.mid  { color: var(--yellow); }
+  .ats-score-big.low  { color: var(--red); }
+
+  .ats-pass-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .ats-pass-badge.pass { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+  .ats-pass-badge.fail { background: rgba(239,68,68,0.12); color: #f87171; border: 1px solid rgba(239,68,68,0.25); }
+
+  .ats-issue-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--text-muted);
+  }
+  .ats-issue-icon { flex-shrink: 0; }
+  .ats-issue-icon.crit { color: #f87171; }
+  .ats-issue-icon.warn { color: var(--yellow); }
+
+  /* Keywords section in sidebar */
+  .kw-chip {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-size: 10px;
+    margin: 2px;
+    line-height: 1.4;
+  }
+  .kw-matched { background: rgba(34,197,94,0.12); color: #86efac; border: 1px solid rgba(34,197,94,0.25); }
+  .kw-missing { background: rgba(239,68,68,0.08); color: #fca5a5; border: 1px solid rgba(239,68,68,0.2); }
+
+  /* History action links */
+  .history-action-links {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+
+  /* Ground-truth diff (spec 2026-07-15-tailor-diff-verdicts-design) */
+  .diff-ctx { color: var(--text-faint); font-size: 12px; white-space: pre-wrap; }
+  .diff-line { font-size: 12.5px; line-height: 1.55; margin: 3px 0; }
+  .diff-del { color: var(--red); text-decoration: line-through; opacity: .75; }
+  .diff-ins { color: var(--green); font-weight: 500; }
+  .diff-chip { display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 11px; margin: 2px 4px 2px 0; cursor: pointer;
+    border: 1px solid var(--border-light); background: var(--surface2); }
+  .diff-chip.ok { color: var(--green); }
+  .diff-chip.bad { color: var(--red); }
+  .diff-chip.warn { color: var(--amber, #d29922); }
+  .verdict-detail { margin: 4px 0 8px 8px; }
+  .diff-provenance { font-size: 11px; color: var(--text-muted);
+    background: var(--surface2); padding: 6px 8px; border-radius: 6px;
+    margin: 6px 0; }
+  .diff-loading { font-size: 12px; color: var(--text-faint); padding: 6px 0; }
+  .tailor-issue-badge { color: var(--amber, #d29922); margin-left: 4px; cursor: help; }
+  .tailor-issue-facts { font-size: 11px; color: var(--amber, #d29922); margin-top: 8px; line-height: 1.4; }
+
+  /* Cost stat */
+  .history-cost-stat {
+    font-size: 11px;
+    color: var(--text-faint);
+    margin-top: 4px;
+  }
+
+  @media (max-width: 900px) {
+    #history-panel { width: 100vw; }
+    .history-detail-grid { grid-template-columns: 1fr; }
+    .history-item-meta { display: none; }
+  }
+
+  /* Refresh indicator */
+  #refresh-indicator {
+    display: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 1.5s ease infinite;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .sort-arrow {
+    display: inline-block;
+    margin-left: 4px;
+    opacity: 0;
+    font-style: normal;
+  }
+  #jobs-table th:hover .sort-arrow { opacity: 0.35; }
+  #jobs-table th:hover .sort-arrow::after { content: '▲'; }
+  .sort-arrow.asc  { opacity: 1; }
+  .sort-arrow.asc::after  { content: '▲'; }
+  .sort-arrow.desc { opacity: 1; }
+  .sort-arrow.desc::after { content: '▼'; }
+
+  /* Priority company styles */
+  #jobs-table tbody tr.priority-row {
+    border-left: 3px solid #f59e0b;
+    background: rgba(245,158,11,0.04);
+  }
+  #jobs-table tbody tr.priority-row:hover,
+  #jobs-table tbody tr.priority-row.expanded {
+    background: rgba(245,158,11,0.09);
+  }
+  .priority-star {
+    display: inline-block;
+    color: #f59e0b;
+    font-size: 11px;
+    margin-left: 5px;
+    vertical-align: middle;
+    line-height: 1;
+  }
+  .priority-tag {
+    display: inline-block;
+    background: rgba(245,158,11,0.15);
+    color: #f59e0b;
+    border: 1px solid rgba(245,158,11,0.35);
+    border-radius: 10px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    vertical-align: middle;
+  }
+  .filter-btn.priority-active {
+    background: rgba(245,158,11,0.15);
+    border-color: #f59e0b;
+    color: #f59e0b;
+    font-weight: 600;
+  }
+
+  /* Prevent 300ms tap delay and double-tap zoom on interactive elements */
+  .btn, .filter-btn, .status-select, #search-input, #jobs-table th {
+    touch-action: manipulation;
+  }
+
+  /* Estimated (not posted) comp */
+  .salary-text.est-salary { color: var(--yellow); font-style: italic; }
+
+  .fresh-dot { color: var(--green); }
+
+  /* Session divider rows (Added sort mode) */
+  #jobs-table tbody tr.session-divider td {
+    padding: 14px 12px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    background: transparent;
+    border-bottom: 1px solid var(--border-light);
+    cursor: default;
+  }
+  #jobs-table tbody tr.session-divider:hover { background: transparent; }
+
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <header id="header">
+    <div id="header-left">
+      <div class="logo-icon">&#x1F9FF;</div>
+      <div>
+        <div class="logo-text">Job Sentinel</div>
+        <div class="logo-subtitle" id="header-subtitle">Loading...</div>
+      </div>
+    </div>
+    <div id="header-right">
+      <select id="profile-select" onchange="onProfileChange(this.value)" title="Switch profile"></select>
+      <span id="last-updated">Loading...</span>
+      <span id="refresh-indicator"></span>
+      <button class="btn btn-sm btn-ghost" onclick="openHistoryPanel()" title="View tailor history">&#x1F4DC; History</button>
+      <button class="btn btn-sm btn-ghost" id="auto-tailor-toggle" onclick="toggleAutoTailor()"
+              title="Auto-tailor jobs with Score &ge; 60 and Filter &ge; 60 after each scrape run">&#x2702; Auto: &hellip;</button>
+      <button class="btn btn-sm" onclick="loadData()">&#x21BB; Refresh</button>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main id="main">
+
+    <!-- Stats -->
+    <div id="stats-row">
+      <div class="stat-card accent">
+        <div class="stat-value" id="stat-total">—</div>
+        <div class="stat-label">Total Jobs</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-avg">—</div>
+        <div class="stat-label">Avg Score</div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-value" id="stat-top">—</div>
+        <div class="stat-label">Top Match</div>
+      </div>
+      <div class="stat-card yellow">
+        <div class="stat-value" id="stat-today">—</div>
+        <div class="stat-label">Jobs Today</div>
+      </div>
+    </div>
+
+    <!-- Analytics (collapsible) -->
+    <details id="analytics-panel" style="margin:2px 0 10px;">
+      <summary style="cursor:pointer;color:var(--text-faint);font-size:12px;">&#x1F4C8; Market analytics</summary>
+      <div id="analytics-body" style="display:flex;gap:32px;flex-wrap:wrap;padding:12px 4px;"></div>
+    </details>
+
+    <!-- Filter Bar -->
+    <div id="filter-bar">
+      <span class="filter-label">Score</span>
+      <div class="filter-group" id="score-filters">
+        <button class="filter-btn active" data-score="" onclick="setScoreFilter(this, '')">All</button>
+        <button class="filter-btn" data-score="80" onclick="setScoreFilter(this, 80)">80+</button>
+        <button class="filter-btn" data-score="60" onclick="setScoreFilter(this, 60)">60+</button>
+        <button class="filter-btn" data-score="40" onclick="setScoreFilter(this, 40)">40+</button>
+      </div>
+
+      <div class="filter-separator"></div>
+      <span class="filter-label">Filter</span>
+      <div class="filter-group" id="filter-score-filters">
+        <button class="filter-btn active" data-fscore="" onclick="setFilterScoreFilter(this, '')">All</button>
+        <button class="filter-btn" data-fscore="80" onclick="setFilterScoreFilter(this, 80)">80+</button>
+        <button class="filter-btn" data-fscore="60" onclick="setFilterScoreFilter(this, 60)">60+</button>
+        <button class="filter-btn" data-fscore="40" onclick="setFilterScoreFilter(this, 40)">40+</button>
+      </div>
+
+      <div class="filter-separator"></div>
+      <span class="filter-label">Knockouts</span>
+      <div class="filter-group" id="knockout-filters">
+        <button class="filter-btn active" id="ko-show" onclick="setHideKnockouts(this, false)">Show</button>
+        <button class="filter-btn" id="ko-hide" onclick="setHideKnockouts(this, true)">Hide KO</button>
+      </div>
+
+      <div class="filter-separator"></div>
+
+      <span class="filter-label">Status</span>
+      <div class="filter-group" id="status-filters">
+        <button class="filter-btn active" data-status="" onclick="setStatusFilter(this, '')">All</button>
+        <button class="filter-btn" data-status="new" onclick="setStatusFilter(this, 'new')">New</button>
+        <button class="filter-btn" data-status="saved" onclick="setStatusFilter(this, 'saved')">Saved</button>
+        <button class="filter-btn" data-status="applied" onclick="setStatusFilter(this, 'applied')">Applied</button>
+        <button class="filter-btn" data-status="not_interested" onclick="setStatusFilter(this, 'not_interested')">Not Interested</button>
+        <button class="filter-btn" id="offers-filter-btn" onclick="toggleOffersFilter(this)" title="Jobs at the Offer stage">&#x1F4B0; Offers</button>
+      </div>
+
+      <div class="filter-separator"></div>
+
+      <span class="filter-label">Comp</span>
+      <div class="filter-group" id="comp-filters">
+        <button class="filter-btn active" data-comp="" onclick="setCompFilter(this, '')">All</button>
+        <button class="filter-btn" data-comp="has" onclick="setCompFilter(this, 'has')" title="Only jobs with an employer-posted salary">Posted $</button>
+        <!-- Comp tier chips render dynamically from /api/ui-config (renderCompChips). -->
+      </div>
+
+      <div class="filter-separator"></div>
+
+      <button class="filter-btn" id="priority-filter-btn" onclick="togglePriorityFilter(this)">&#x2605; Priority Co.</button>
+
+      <button class="filter-btn" id="local-filter-btn" onclick="toggleLocalFilter(this)" title="Local commuter-area jobs">&#x1F4CD; Local</button>
+
+      <button class="filter-btn" id="latest-run-btn" onclick="toggleLatestRunFilter(this)" title="Only jobs from the newest scrape run">&#x1F195; Latest run</button>
+
+      <button class="filter-btn" id="show-dismissed-btn" onclick="toggleShowDismissed(this)" title="Show jobs you've dismissed">&#x1F5D1; Dismissed</button>
+
+      <div class="filter-separator"></div>
+      <span class="filter-label">Group</span>
+      <div class="filter-group" id="group-by-filters">
+        <button class="filter-btn active" data-group="run" onclick="setGroupBy(this, 'run')" title="One group per scrape run">Run</button>
+        <button class="filter-btn" data-group="day" onclick="setGroupBy(this, 'day')" title="One group per calendar day">Day</button>
+      </div>
+
+      <input type="text" id="search-input" placeholder="Search title, company..." oninput="filterBySearch()">
+    </div>
+
+    <!-- Mobile Sort Bar (visible only at ≤480px) -->
+    <div id="mobile-sort-bar">
+      <span class="filter-label">Sort</span>
+      <div class="filter-group">
+        <button class="filter-btn active" id="msort-score" onclick="setSortBy('score')">Score <span class="msort-arrow" id="msort-arrow-score">▼</span></button>
+        <button class="filter-btn" id="msort-date" onclick="setSortBy('date_posted')" title="Newest first; tap again to reverse"><span id="msort-date-label">Date</span> <span class="msort-arrow" id="msort-arrow-date"></span></button>
+        <button class="filter-btn" id="msort-company" onclick="setSortBy('company')">Company <span class="msort-arrow" id="msort-arrow-company"></span></button>
+        <button class="filter-btn" id="msort-salary" onclick="setSortBy('salary')">Salary <span class="msort-arrow" id="msort-arrow-salary"></span></button>
+        <button class="filter-btn" id="msort-health" onclick="setSortBy('health')">Health <span class="msort-arrow" id="msort-arrow-health"></span></button>
+      </div>
+    </div>
+
+    <!-- Jobs Table -->
+    <div id="jobs-container">
+      <div id="loading">
+        <div class="spinner"></div>
+        <div>Loading jobs...</div>
+      </div>
+
+      <table id="jobs-table" style="display:none;">
+        <thead>
+          <tr>
+            <th class="col-score" onclick="setSortBy('score')" id="th-score">
+              Score <span class="sort-arrow desc" id="arrow-score"></span>
+            </th>
+            <th class="col-filter" onclick="setSortBy('filter')" id="th-filter">
+              Filter <span class="sort-arrow" id="arrow-filter"></span>
+            </th>
+            <th class="col-title" onclick="setSortBy('title')" id="th-title">
+              Title <span class="sort-arrow" id="arrow-title"></span>
+            </th>
+            <th class="col-company" onclick="setSortBy('company')" id="th-company">
+              Company <span class="sort-arrow" id="arrow-company"></span>
+            </th>
+            <th class="col-health" onclick="setSortBy('health')" id="th-health">
+              Health <span class="sort-arrow" id="arrow-health"></span>
+            </th>
+            <th class="col-location" onclick="setSortBy('location')" id="th-location">
+              Location <span class="sort-arrow" id="arrow-location"></span>
+            </th>
+            <th class="col-salary" onclick="setSortBy('salary')" id="th-salary">
+              Salary <span class="sort-arrow" id="arrow-salary"></span>
+            </th>
+            <th class="col-source" onclick="setSortBy('source')" id="th-source">
+              Source <span class="sort-arrow" id="arrow-source"></span>
+            </th>
+            <th class="col-date" onclick="setSortBy('date_posted')" id="th-date" title="Newest first; click again to reverse">
+              <span id="th-date-label">Date</span> <span class="sort-arrow" id="arrow-date"></span>
+            </th>
+            <th class="col-status">Status</th>
+            <th class="col-actions">Open</th>
+          </tr>
+        </thead>
+        <tbody id="jobs-tbody"></tbody>
+      </table>
+
+      <div id="empty-state" style="display:none;">
+        <div class="empty-icon">&#x1F50D;</div>
+        <h3>No jobs found</h3>
+        <p>Try adjusting your filters or run a new scrape.</p>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Tailor History Panel -->
+<div id="history-overlay" onclick="onHistoryOverlayClick(event)">
+  <div id="history-panel">
+    <div id="history-panel-header">
+      <h2>&#x1F4DC; Tailor History <span id="history-count"></span></h2>
+      <button id="history-close-btn" onclick="closeHistoryPanel()" title="Close">&#x2715;</button>
+    </div>
+    <div id="history-body">
+      <div class="history-loading">
+        <div class="spinner"></div>
+        <div>Loading history...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ============================================================
+// Priority Companies
+// ============================================================
+const PRIORITY_COMPANIES = new Set([
+  'anthropic', 'google cloud', 'openai', 'databricks', 'servicenow',
+  'pagerduty', 'salesforce', 'uipath', 'datadog', 'stripe',
+  'scale ai', 'vercel', 'gitlab', 'figma', 'plaid',
+  'intapp', 'twilio', 'five9', 'palantir', 'ramp',
+  'nvidia', 'tsmc', 'asml', 'broadcom', 'microsoft', 'oracle',
+  'adobe', 'arista networks', 'palo alto networks', 'cloudflare',
+  'visa', 'mastercard', 'jpmorgan', 'eli lilly', 'netflix',
+  'apple', 'unitedhealth',
+]);
+
+function isPriorityCompany(name) {
+  const n = (name || '').toLowerCase();
+  for (const pc of PRIORITY_COMPANIES) {
+    if (n.includes(pc)) return true;
+  }
+  return false;
+}
+
+// ============================================================
+// Config-driven UI (served by /api/ui-config; inert generics on fetch failure).
+// ============================================================
+let UI = { page_title: 'Job Sentinel', default_profile: 'default',
+           profiles: {}, comp_tiers: [], local_pattern: null };
+let LOCAL_LOCATION_RE = null;
+
+async function loadUiConfig() {
+  try {
+    const cfg = await apiFetch('/api/ui-config');
+    if (cfg) UI = { ...UI, ...cfg };
+  } catch (e) { /* keep inert defaults */ }
+  LOCAL_LOCATION_RE = UI.local_pattern ? new RegExp(UI.local_pattern, 'i') : null;
+  document.title = UI.page_title;
+  if (!currentProfile) currentProfile = UI.default_profile;
+  const localBtn = document.getElementById('local-filter-btn');
+  if (localBtn && !LOCAL_LOCATION_RE) localBtn.style.display = 'none';
+  renderCompChips();
+}
+
+function profileLabel(p)    { return (UI.profiles[p] && UI.profiles[p].label) || p; }
+function profileSubtitle(p) { return (UI.profiles[p] && UI.profiles[p].subtitle) || p; }
+
+function renderCompChips() {
+  const wrap = document.getElementById('comp-filters');
+  if (!wrap) return;
+  wrap.querySelectorAll('[data-comp-tier]').forEach(b => b.remove());
+  for (const t of (UI.comp_tiers || [])) {
+    const b = document.createElement('button');
+    b.className = 'filter-btn';
+    b.dataset.comp = String(t);
+    b.dataset.compTier = '1';
+    b.textContent = '$' + Math.round(t / 1000) + 'K+';
+    b.onclick = () => setCompFilter(b, String(t));
+    wrap.appendChild(b);
+  }
+}
+
+// ============================================================
+// Profile
+// ============================================================
+const _urlProfile = new URLSearchParams(window.location.search).get('profile');
+// Resolved to UI.default_profile in loadUiConfig when neither URL nor storage set it.
+let currentProfile = _urlProfile || localStorage.getItem('selectedProfile') || null;
+
+function onProfileChange(profile) {
+  currentProfile = profile;
+  localStorage.setItem('selectedProfile', profile);
+  const url = new URL(window.location);
+  url.searchParams.set('profile', profile);
+  history.replaceState(null, '', url);
+  updateProfileUI();
+  loadData();
+}
+
+function updateProfileUI() {
+  const subtitle = document.getElementById('header-subtitle');
+  if (subtitle) subtitle.textContent = profileSubtitle(currentProfile);
+  const sel = document.getElementById('profile-select');
+  if (sel) sel.value = currentProfile;
+}
+
+async function loadProfiles() {
+  try {
+    const profiles = await apiFetch('/api/profiles');
+    const sel = document.getElementById('profile-select');
+    if (!sel || !profiles || !profiles.length) return;
+    sel.innerHTML = profiles.map(p => {
+      const label = profileLabel(p);
+      return `<option value="${escAttr(p)}">${escHtml(label)}</option>`;
+    }).join('');
+    sel.value = currentProfile;
+  } catch (e) {
+    // Fallback: the HTML select is now empty, so inject the default profile
+    // option so the switcher is never blank on an /api/profiles failure.
+    const sel = document.getElementById('profile-select');
+    if (sel) sel.innerHTML = '<option value="' + escAttr(UI.default_profile) + '">'
+      + escHtml(profileLabel(UI.default_profile)) + '</option>';
+  }
+}
+
+// ============================================================
+// State
+// ============================================================
+// One constant feeds both the /api/jobs limit param and the truncation
+// check below, so the two can't drift apart. Sized well above the visible
+// corpus (~2.1k as of 2026-07) so nothing truncates; the indicator row
+// below is the backstop if the corpus ever outgrows it.
+const JOBS_FETCH_LIMIT = 10000;
+
+const state = {
+  allJobs: [],
+  filteredJobs: [],
+  companyInsights: {},   // normalized_name -> insights object
+  runsById: {},          // run_id -> runs row (for session divider labels)
+  expandedJobId: null,
+  scoreFilter: '',
+  filterScoreFilter: '',
+  autoTailorEnabled: null,   // null until GET /api/settings/auto-tailor lands
+  hideKnockouts: false,
+  statusFilter: '',
+  compFilter: '',
+  priorityFilter: false,
+  offerFilter: false,
+  localFilter: false,
+  latestRunFilter: false,
+  showDismissed: false,
+  sortBy: 'added',
+  sortDir: 'desc',
+  groupBy: 'run',        // Added-view grouping: 'run' | 'day'
+  fetchTruncated: false, // payload hit JOBS_FETCH_LIMIT — oldest runs missing
+  searchQuery: '',
+  autoRefreshTimer: null,
+  tailorTasks: {},       // jobId -> {taskId, status, progress, result, error}
+};
+
+// Active polling intervals: taskId -> intervalId
+const _tailorPolls = {};
+
+// ============================================================
+// API Calls
+// ============================================================
+async function apiFetch(path) {
+  const resp = await fetch(path);
+  if (!resp.ok) throw new Error(`API error ${resp.status} for ${path}`);
+  return resp.json();
+}
+
+async function apiPatch(path, body) {
+  const resp = await fetch(path, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) throw new Error(`API error ${resp.status}`);
+  return resp.json();
+}
+
+// ============================================================
+// Data Loading
+// ============================================================
+async function loadData() {
+  showLoading(true);
+  showRefreshIndicator(true);
+  try {
+    const [jobs, stats, companies, runs] = await Promise.all([
+      // sort_by=added mirrors the default display order (newest run first),
+      // so if the corpus exceeds the limit the OLDEST runs fall off whole —
+      // never rows scattered across the recent runs the view groups by.
+      apiFetch(`/api/jobs?profile=${encodeURIComponent(currentProfile)}&sort_by=added&limit=${JOBS_FETCH_LIMIT}&show_dismissed=${state.showDismissed}`),
+      apiFetch(`/api/stats?profile=${encodeURIComponent(currentProfile)}`),
+      apiFetch('/api/companies').catch(() => ({})),
+      apiFetch('/api/runs?limit=1000').catch(() => []),   // labels only — dividers degrade to "Run #N" without it
+    ]);
+    // The list payload is slim — toggleDetail lazy-fetches description /
+    // filter_json / comps per row. Carry those over from the previous
+    // objects, otherwise a refresh while a row is expanded re-renders it
+    // from a fresh slim object and the detail panel goes blank
+    // ("No description available." on a job that has one).
+    const prevById = new Map(state.allJobs.map(j => [j.id, j]));
+    for (const j of jobs) {
+      const prev = prevById.get(j.id);
+      if (!prev) continue;
+      for (const k of ['description', 'filter_json', '_comps', '_tailorHistory']) {
+        if (j[k] === undefined && prev[k] !== undefined) j[k] = prev[k];
+      }
+    }
+    state.allJobs = jobs;
+    state.fetchTruncated = jobs.length >= JOBS_FETCH_LIMIT;
+    state.companyInsights = companies || {};
+    state.runsById = Object.fromEntries((runs || []).map(r => [r.id, r]));
+    updateStats(stats);
+    loadAnalytics();
+    applyFilters();
+    updateLastUpdated();
+  } catch (e) {
+    console.error('Failed to load data:', e);
+    showToast('Failed to load data. Is the server running?', 'error');
+    showLoading(false);
+  }
+  showRefreshIndicator(false);
+}
+
+function updateStats(stats) {
+  setText('stat-total', stats.total_jobs ?? '—');
+  setText('stat-avg', stats.avg_score != null ? stats.avg_score.toFixed(1) : '—');
+  setText('stat-top', stats.top_score ?? '—');
+  setText('stat-today', stats.jobs_today ?? '—');
+}
+
+async function loadAnalytics() {
+  try {
+    const a = await apiFetch(`/api/analytics?profile=${encodeURIComponent(currentProfile)}`);
+    renderAnalytics(a);
+  } catch (e) { /* non-critical */ }
+}
+
+function abar(label, val, maxVal, extra) {
+  const w = maxVal ? Math.max(2, Math.round((val / maxVal) * 120)) : 2;
+  return `<div style="display:flex;align-items:center;gap:6px;font-size:11px;margin:2px 0;">
+    <span style="width:95px;color:var(--text-faint);text-align:right;">${escHtml(String(label))}</span>
+    <div style="background:#6366f1;height:10px;width:${w}px;border-radius:2px;"></div>
+    <span>${val}${extra || ''}</span></div>`;
+}
+
+function renderAnalytics(a) {
+  const body = document.getElementById('analytics-body');
+  if (!body) return;
+  const wMax = Math.max(1, ...a.weekly.map(w => w.new_jobs));
+  const cMax = Math.max(1, ...Object.values(a.comp_buckets));
+  const sMax = Math.max(1, ...a.sources_14d.map(s => s.jobs));
+  const col = (title, rows) =>
+    `<div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-faint);margin-bottom:4px;">${title}</div>${rows}</div>`;
+  body.innerHTML =
+    col('New jobs / week (★ = 80+ matches)',
+        a.weekly.map(w => abar(w.week, w.new_jobs, wMax, ` (${w.high_matches}&#x2605;)`)).join('')) +
+    col('Live jobs by expected comp',
+        Object.entries(a.comp_buckets).map(([k, v]) => abar(k, v, cMax)).join('')) +
+    col('Source yield, last 14d (★ = 80+)',
+        a.sources_14d.map(s => abar(s.source, s.jobs, sMax, ` (${s.high}&#x2605;)`)).join(''));
+}
+
+function updateLastUpdated() {
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  setText('last-updated', `Updated ${timeStr}`);
+}
+
+// ============================================================
+// Filtering & Sorting
+// ============================================================
+function applyFilters() {
+  let jobs = [...state.allJobs];
+
+  // Score filter — gate on the EFFECTIVE score (what the cell shows and the
+  // sort uses), so "80+" never surfaces a knocked-out job displayed as 40.
+  if (state.scoreFilter !== '') {
+    jobs = jobs.filter(j => effectiveScore(j) >= parseInt(state.scoreFilter));
+  }
+
+  // Filter-score filter — gate on the DISPLAYED value (what filterBadge
+  // renders): KO, gated, and un-judged rows show no number, so no
+  // threshold surfaces them; Math.round matches the cell display.
+  if (state.filterScoreFilter !== '') {
+    jobs = jobs.filter(j => j.filter_knockout !== 1 && j.filter_score != null
+      && Math.round(j.filter_score) >= parseInt(state.filterScoreFilter));
+  }
+
+  // Knockout filter
+  if (state.hideKnockouts) {
+    jobs = jobs.filter(j => j.filter_knockout !== 1);
+  }
+
+  // Status filter
+  if (state.statusFilter !== '') {
+    jobs = jobs.filter(j => j.status === state.statusFilter);
+  }
+
+  // Comp filter
+  if (state.compFilter === 'has') {
+    jobs = jobs.filter(j => j.salary_min || j.salary_max);
+  } else if (state.compFilter !== '') {
+    const floor = parseInt(state.compFilter);
+    jobs = jobs.filter(j => expectedMax(j) >= floor);
+  }
+
+  // Offers filter
+  if (state.offerFilter) {
+    jobs = jobs.filter(j => j.stage === 'offer');
+  }
+
+  // Priority company filter
+  if (state.priorityFilter) {
+    jobs = jobs.filter(j => isPriorityCompany(j.company));
+  }
+
+  // Local commuter-area filter
+  if (state.localFilter) {
+    jobs = jobs.filter(j => LOCAL_LOCATION_RE && LOCAL_LOCATION_RE.test(j.location || ''));
+  }
+
+  // Latest-run filter — only jobs from the newest scrape run. allJobs is
+  // already profile-scoped by the API, so the max is per-profile. `?? -1`
+  // on both sides degrades gracefully if every row predates run tracking.
+  if (state.latestRunFilter) {
+    const maxRun = state.allJobs.reduce((m, j) => Math.max(m, j.run_id ?? -1), -1);
+    jobs = jobs.filter(j => (j.run_id ?? -1) === maxRun);
+  }
+
+  // Search filter
+  if (state.searchQuery) {
+    const q = state.searchQuery.toLowerCase();
+    jobs = jobs.filter(j =>
+      (j.title || '').toLowerCase().includes(q) ||
+      (j.company || '').toLowerCase().includes(q) ||
+      (j.location || '').toLowerCase().includes(q)
+    );
+  }
+
+  // Sort
+  jobs.sort((a, b) => {
+    let aVal, bVal;
+    switch (state.sortBy) {
+      case 'score':
+        aVal = effectiveScore(a); bVal = effectiveScore(b); break;
+      case 'filter':
+        aVal = a.filter_score ?? -1; bVal = b.filter_score ?? -1; break;
+      case 'title':
+        aVal = (a.title || '').toLowerCase();
+        bVal = (b.title || '').toLowerCase(); break;
+      case 'company':
+        aVal = (a.company || '').toLowerCase();
+        bVal = (b.company || '').toLowerCase(); break;
+      case 'location':
+        aVal = (a.location || '').toLowerCase();
+        bVal = (b.location || '').toLowerCase(); break;
+      case 'health': {
+        const ia = getCompanyIntel(a.company);
+        const ib = getCompanyIntel(b.company);
+        aVal = ia ? (ia.health_score || 0) : -1;
+        bVal = ib ? (ib.health_score || 0) : -1;
+        break;
+      }
+      case 'salary':
+        aVal = expectedMax(a);
+        bVal = expectedMax(b); break;
+      case 'source':
+        aVal = (a.source || '').toLowerCase();
+        bVal = (b.source || '').toLowerCase(); break;
+      case 'date_posted': {
+        const da = a.date_posted ? Date.parse(a.date_posted) : 0;
+        const db = b.date_posted ? Date.parse(b.date_posted) : 0;
+        aVal = isNaN(da) ? 0 : da;
+        bVal = isNaN(db) ? 0 : db;
+        break;
+      }
+      case 'added': {
+        // Session view. Group: scrape run (default) or local calendar
+        // day of created_at, per state.groupBy. Newest group first
+        // (desc, the default) or oldest first (asc); best match first
+        // within a group either way. Sentinels (NULL run_id / missing
+        // created_at) group at the "oldest" end. Early return bypasses
+        // the generic sortDir handling below.
+        if (state.groupBy === 'day') {
+          const ka = addedDayKey(a), kb = addedDayKey(b);
+          if (ka !== kb) return state.sortDir === 'asc' ? ka - kb : kb - ka;
+          return effectiveScore(b) - effectiveScore(a);
+        }
+        const ra = a.run_id ?? -1, rb = b.run_id ?? -1;
+        if (ra !== rb) return state.sortDir === 'asc' ? ra - rb : rb - ra;
+        return effectiveScore(b) - effectiveScore(a);
+      }
+      default:
+        aVal = effectiveScore(a); bVal = effectiveScore(b);
+    }
+    if (aVal < bVal) return state.sortDir === 'asc' ? -1 : 1;
+    if (aVal > bVal) return state.sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  state.filteredJobs = jobs;
+  renderTable();
+}
+
+// ============================================================
+// Rendering
+// ============================================================
+function renderTable() {
+  const tbody = document.getElementById('jobs-tbody');
+  const table = document.getElementById('jobs-table');
+  const empty = document.getElementById('empty-state');
+  const loading = document.getElementById('loading');
+
+  loading.style.display = 'none';
+
+  if (state.filteredJobs.length === 0) {
+    table.style.display = 'none';
+    empty.style.display = 'block';
+    return;
+  }
+
+  table.style.display = 'table';
+  empty.style.display = 'none';
+
+  tbody.innerHTML = '';
+
+  // Session grouping (Added sort): count VISIBLE jobs per group (scrape
+  // run, or calendar day per state.groupBy) so divider labels show "how
+  // many left to look at" under the active filters.
+  const sessionView = state.sortBy === 'added';
+  const byDay = state.groupBy === 'day';
+  const groupKeyOf = j => byDay ? addedDayKey(j) : (j.run_id ?? 'none');
+  const groupCounts = {};
+  if (sessionView) {
+    state.filteredJobs.forEach(j => {
+      const k = groupKeyOf(j);
+      groupCounts[k] = (groupCounts[k] || 0) + 1;
+    });
+  }
+  let prevGroupKey;
+
+  state.filteredJobs.forEach(job => {
+    const groupKey = groupKeyOf(job);
+    if (sessionView && groupKey !== prevGroupKey) {
+      prevGroupKey = groupKey;
+      const divider = document.createElement('tr');
+      divider.className = 'session-divider';
+      const label = byDay ? dayGroupLabel(job, groupCounts[groupKey])
+                          : sessionLabel(job.run_id, groupCounts[groupKey]);
+      divider.innerHTML = `<td colspan="11" data-label="">${escHtml(label)}</td>`;
+      tbody.appendChild(divider);
+    }
+
+    // Main row
+    const tr = document.createElement('tr');
+    tr.dataset.id = job.id;
+    if (state.expandedJobId === job.id) tr.classList.add('expanded');
+    const isPriority = isPriorityCompany(job.company);
+    if (isPriority) tr.classList.add('priority-row');
+    const isDismissed = job.dismissed === 1 || job.dismissed === true;
+    if (isDismissed) tr.classList.add('dismissed-row');
+
+    const intel = getCompanyIntel(job.company);
+    const priorityStar = isPriority ? '<span class="priority-star" title="Priority Company">&#x2605;</span>' : '';
+    const actionBtns = isDismissed
+      ? `<button class="btn-restore" onclick="undismissJob(${job.id})" title="Restore job">&#x21BA; Restore</button>`
+      : `<a href="${escAttr(job.url)}" target="_blank" rel="noopener noreferrer"><button class="btn btn-sm btn-ghost">&#x2197;</button></a>
+         ${tailorActionBtn(job)}
+         <button class="btn-dismiss" onclick="dismissJob(${job.id})" title="Dismiss — job no longer posted">&#x2715;</button>`;
+    tr.innerHTML = `
+      <td class="col-score" data-label="">${scoreCell(job)}</td>
+      <td class="col-filter" data-label="Filter">${filterBadge(job)}</td>
+      <td class="col-title" data-label="Title">
+        <div class="job-title-text">${escHtml(job.title || '')}</div>
+      </td>
+      <td class="col-company" data-label="Company">${escHtml(job.company || '')}${priorityStar}</td>
+      <td class="col-health" data-label="Health">${healthBadge(intel)}</td>
+      <td class="col-location" data-label="Location">${escHtml(job.location || '—')}</td>
+      <td class="col-salary" data-label="Salary">${salaryDisplay(job)}</td>
+      <td class="col-source" data-label="Source">${sourceBadge(job.source)}</td>
+      <td class="col-date" data-label="${sessionView ? 'Added' : 'Date'}">${sessionView ? formatAddedDate(job.created_at) : formatDate(job.date_posted)}${freshDot(job)}</td>
+      <td class="col-status" data-label="Status" onclick="event.stopPropagation()">
+        ${statusSelect(job)}
+      </td>
+      <td class="col-actions" data-label="" onclick="event.stopPropagation()">
+        ${actionBtns}
+      </td>
+    `;
+
+    tr.addEventListener('click', () => toggleDetail(job));
+    tbody.appendChild(tr);
+
+    // Detail row (if expanded)
+    if (state.expandedJobId === job.id) {
+      const detailTr = document.createElement('tr');
+      detailTr.classList.add('detail-row');
+      detailTr.dataset.detailFor = job.id;
+      const jobIntel = getCompanyIntel(job.company);
+      detailTr.innerHTML = `
+        <td colspan="11">
+          <div class="detail-panel">
+            <div>
+              <h4 style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-faint);margin-bottom:10px;">Job Description</h4>
+              <div class="detail-description">${
+                job.description === undefined && job._detailError
+                  ? '<em style="color:var(--text-faint)">Failed to load description — collapse and reopen to retry.</em>'
+                  : formatDescription(job.description)
+              }</div>
+            </div>
+            <div>
+              <div class="detail-meta">
+                <h4>Match Details</h4>
+                ${isPriorityCompany(job.company) ? `<div style="margin-bottom:10px;"><span class="priority-tag">&#x2605; Priority Company</span></div>` : ''}
+                ${metaRow('Score', `<strong>${effectiveScore(job)}/100</strong>${effectiveScore(job) !== (job.score || 0) ? ` <span style="color:var(--text-faint);font-size:11px;">(was ${job.score} — knockout gate)</span>` : ''}`)}
+                ${job.llm_score != null ? metaRow('AI Fit', llmScoreBadge(job.llm_score)) : ''}
+                ${filterDetailRows(job)}
+                ${metaRow('Source', job.source || '—')}
+                ${metaRow('Salary', salaryDetailText(job))}
+                ${compsRow(job)}
+                ${metaRow('Posted', formatDate(job.date_posted))}
+                ${metaRow('Status', job.status || 'new')}
+                ${job.match_explanation ? `<div class="explanation-box">${escHtml(job.match_explanation)}</div>` : ''}
+                ${job.llm_explanation ? `<div class="explanation-box" style="margin-top:6px;border-color:#6366f1;"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#6366f1;display:block;margin-bottom:4px;">AI Analysis</span>${escHtml(job.llm_explanation)}</div>` : ''}
+                ${feedbackButtons(job)}
+              </div>
+              ${trackingPanel(job)}
+              ${tailorResultPanel(job)}
+              ${companyIntelPanel(job.company, jobIntel)}
+            </div>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(detailTr);
+    }
+  });
+
+  if (state.fetchTruncated) {
+    const note = document.createElement('tr');
+    note.className = 'session-divider';
+    note.innerHTML = `<td colspan="11" data-label="">&#x26A0; Showing the ${JOBS_FETCH_LIMIT} most recently added jobs — older runs are not loaded</td>`;
+    tbody.appendChild(note);
+  }
+}
+
+// ============================================================
+// Company Intel helpers
+// ============================================================
+function normalizeCompany(name) {
+  return (name || '').toLowerCase().replace(/[^\w\s]/g, '').trim();
+}
+
+function getCompanyIntel(companyName) {
+  return state.companyInsights[normalizeCompany(companyName)] || null;
+}
+
+// Expected comp: posted salary first, else the Claude estimate. Used for
+// the Comp filter and the salary sort so estimate-only jobs participate.
+function expectedMax(job) {
+  return job.salary_max || job.salary_min || job.salary_est_max || job.salary_est_min || 0;
+}
+
+function setCompFilter(btn, val) {
+  state.compFilter = val;
+  document.querySelectorAll('#comp-filters .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  applyFilters();
+}
+
+function healthBadge(intel) {
+  if (!intel) return '<span class="health-badge health-unknown">—</span>';
+  const score = intel.health_score || 50;
+  let cls, label;
+  if (score >= 70) { cls = 'health-strong';  label = `&#x2665; ${score}`; }
+  else if (score >= 50) { cls = 'health-stable';  label = `&#x25CF; ${score}`; }
+  else if (score >= 30) { cls = 'health-mixed';   label = `&#x26A0; ${score}`; }
+  else                   { cls = 'health-caution'; label = `&#x26D4; ${score}`; }
+  return `<span class="health-badge ${cls}" title="${escHtml(intel.health_summary || '')}">${label}</span>`;
+}
+
+function companyIntelPanel(companyName, intel) {
+  if (!intel) {
+    return `<div class="company-intel-panel">
+      <h4>Company Intel</h4>
+      <div class="intel-no-data">No data available yet. Run with company enrichment enabled.</div>
+    </div>`;
+  }
+
+  // Parse flags
+  let flagsHtml = '';
+  try {
+    const flags = JSON.parse(intel.health_flags || '[]');
+    if (flags.length) {
+      flagsHtml = `<div class="intel-flags">${flags.map(f => `
+        <div class="intel-flag flag-${escHtml(f.type)}">
+          <span class="flag-label">${escHtml(f.label)}</span>
+          <span class="flag-text">${escHtml(f.text)}</span>
+        </div>`).join('')}</div>`;
+    }
+  } catch (e) {}
+
+  // Parse headlines
+  let headlinesHtml = '';
+  try {
+    const headlines = JSON.parse(intel.recent_headlines || '[]');
+    if (headlines.length) {
+      headlinesHtml = `<div class="intel-headlines">
+        <div class="intel-headlines-title">Recent Headlines</div>
+        ${headlines.map(h => `<div class="intel-headline-item">${escHtml(h)}</div>`).join('')}
+      </div>`;
+    }
+  } catch (e) {}
+
+  const ticker = intel.stock_ticker
+    ? `<span style="color:var(--text-faint);font-size:10px;margin-left:4px;">${escHtml(intel.stock_ticker)}</span>`
+    : '';
+  const fetched = intel.fetched_at
+    ? `<div style="font-size:10px;color:var(--text-faint);margin-top:8px;">Data from: ${escHtml(intel.fetched_at.substring(0,10))}</div>`
+    : '';
+
+  // Glassdoor ratings block
+  let glassdoorHtml = '';
+  if (intel.glassdoor_overall != null) {
+    const gd = intel.glassdoor_overall;
+    const gdColor = gd >= 4.0 ? 'var(--green)' : (gd >= 3.0 ? 'var(--yellow)' : 'var(--red)');
+    const subParts = [];
+    if (intel.glassdoor_culture) subParts.push(`Culture ${Number(intel.glassdoor_culture).toFixed(1)}`);
+    if (intel.glassdoor_wlb) subParts.push(`WLB ${Number(intel.glassdoor_wlb).toFixed(1)}`);
+    if (intel.glassdoor_management) subParts.push(`Mgmt ${Number(intel.glassdoor_management).toFixed(1)}`);
+    const subStr = subParts.length ? `<span style="color:var(--text-faint);font-size:11px;margin-left:8px;">${subParts.join(' · ')}</span>` : '';
+    glassdoorHtml = `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">
+      <span style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-faint);">Glassdoor</span>
+      <span style="color:${gdColor};font-weight:700;font-size:14px;margin-left:8px;">&#x2605; ${Number(gd).toFixed(1)}/5.0</span>
+      ${subStr}
+    </div>`;
+  }
+
+  return `<div class="company-intel-panel">
+    <h4>Company Intel &mdash; ${escHtml(companyName)}${ticker}</h4>
+    ${metaRow('Health Score', `<strong>${intel.health_score}/100</strong>`)}
+    <div class="intel-summary">${escHtml(intel.health_summary || '')}</div>
+    ${flagsHtml}
+    ${glassdoorHtml}
+    ${headlinesHtml}
+    ${fetched}
+  </div>`;
+}
+
+// ============================================================
+// Application tracking panel
+// ============================================================
+function trackingPanel(job) {
+  const stages = ['', 'applied', 'phone_screen', 'interview', 'offer', 'rejected', 'ghosted'];
+  const labels = { '': '—', applied: 'Applied', phone_screen: 'Phone Screen',
+                   interview: 'Interview', offer: 'Offer', rejected: 'Rejected', ghosted: 'Ghosted' };
+  const opts = stages.map(s =>
+    `<option value="${s}" ${(job.stage || '') === s ? 'selected' : ''}>${labels[s]}</option>`
+  ).join('');
+  let offer = {};
+  try { offer = JSON.parse(job.offer_json || '{}'); } catch (e) {}
+  const tc = (Number(offer.base) || 0) + (Number(offer.bonus) || 0) + (Number(offer.equity_yr) || 0);
+  return `<div class="detail-meta" style="margin-top:10px;">
+    <h4>Application Tracking</h4>
+    ${metaRow('Applied', job.applied_at ? escHtml(String(job.applied_at).substring(0, 10)) : '—')}
+    <div class="meta-item"><span class="meta-key">Stage</span><span class="meta-val">
+      <select id="trk-stage-${job.id}">${opts}</select></span></div>
+    <div class="meta-item"><span class="meta-key">Next action</span><span class="meta-val">
+      <input type="date" id="trk-next-${job.id}" value="${escAttr(job.next_action_date || '')}"></span></div>
+    <textarea id="trk-notes-${job.id}" rows="3"
+      placeholder="Notes — interviewers, comp signals, follow-ups..."
+      style="width:100%;margin-top:6px;">${escHtml(job.notes || '')}</textarea>
+    <div style="margin-top:6px;display:flex;gap:6px;">
+      <input type="number" id="trk-base-${job.id}" placeholder="Base $" value="${escAttr(String(offer.base || ''))}" style="width:32%;">
+      <input type="number" id="trk-bonus-${job.id}" placeholder="Bonus $" value="${escAttr(String(offer.bonus || ''))}" style="width:32%;">
+      <input type="number" id="trk-equity-${job.id}" placeholder="Equity $/yr" value="${escAttr(String(offer.equity_yr || ''))}" style="width:32%;">
+    </div>
+    ${tc ? metaRow('Offer TC', `<strong style="color:var(--green);">$${(tc / 1000).toFixed(0)}k/yr</strong>`) : ''}
+    <button class="btn btn-sm" style="margin-top:8px;" onclick="saveTracking(${job.id})">Save Tracking</button>
+  </div>`;
+}
+
+async function saveTracking(jobId) {
+  const v = id => (document.getElementById(id) || { value: '' }).value;
+  const offer = {
+    base: v(`trk-base-${jobId}`), bonus: v(`trk-bonus-${jobId}`), equity_yr: v(`trk-equity-${jobId}`),
+  };
+  const hasOffer = offer.base || offer.bonus || offer.equity_yr;
+  try {
+    const updated = await apiPatch(`/api/jobs/${jobId}/tracking`, {
+      stage: v(`trk-stage-${jobId}`),
+      notes: v(`trk-notes-${jobId}`),
+      next_action_date: v(`trk-next-${jobId}`),
+      offer_json: hasOffer ? JSON.stringify(offer) : '',
+    });
+    const job = state.allJobs.find(j => j.id === jobId);
+    if (job) Object.assign(job, updated);
+    showToast('Tracking saved', 'success');
+    renderTable();
+  } catch (e) {
+    console.error('Failed to save tracking:', e);
+    showToast('Failed to save tracking', 'error');
+  }
+}
+
+function feedbackButtons(job) {
+  const mk = (dir, icon, label) =>
+    `<button class="btn btn-sm ${job.feedback === dir ? '' : 'btn-ghost'}"
+      onclick="setFeedback(${job.id}, '${dir}')" title="Calibrates future AI scoring">${icon} ${label}</button>`;
+  return `<div style="margin-top:8px;display:flex;gap:6px;">
+    ${mk('more', '&#x1F44D;', 'More like this')}
+    ${mk('less', '&#x1F44E;', 'Less like this')}
+  </div>`;
+}
+
+async function setFeedback(jobId, dir) {
+  const job = state.allJobs.find(j => j.id === jobId);
+  const next = job && job.feedback === dir ? null : dir;  // click again = clear
+  try {
+    const updated = await apiPatch(`/api/jobs/${jobId}/feedback`, { direction: next });
+    if (job) Object.assign(job, updated);
+    showToast(next ? `Feedback saved — ${next} like this` : 'Feedback cleared', 'success');
+    renderTable();
+  } catch (e) {
+    console.error('Failed to save feedback:', e);
+    showToast('Failed to save feedback', 'error');
+  }
+}
+
+// ============================================================
+// Components
+// ============================================================
+function scoreBadge(score) {
+  let cls = 'score-low';
+  if (score >= 80) cls = 'score-high';
+  else if (score >= 60) cls = 'score-mid';
+  return `<span class="score-badge ${cls}">${score}</span>`;
+}
+
+// Mirrors filter_match.KNOCKOUT_GATE_CAP — keep the two in sync.
+const KO_GATE_CAP = 40;
+
+function effectiveScore(job) {
+  const s = job.score || 0;
+  return job.filter_knockout === 1 ? Math.min(s, KO_GATE_CAP) : s;
+}
+
+function scoreCell(job) {
+  const eff = effectiveScore(job);
+  if (eff === (job.score || 0)) return scoreBadge(eff);
+  return `${scoreBadge(eff)} <span style="text-decoration:line-through;color:var(--text-faint);font-size:11px;" title="Pre-knockout score — a failed screening requirement gates this job">${job.score}</span>`;
+}
+
+function filterBadge(job) {
+  if (job.filter_knockout === 1) {
+    return '<span class="ko-badge" title="A required screening question fails — likely auto-rejected">KO</span>';
+  }
+  if (job.filter_score == null) {
+    if (job.filter_gate) {
+      const label = job.filter_gate.kind === 'onsite' ? 'onsite' : 'off-target';
+      const why = job.filter_gate.kind === 'onsite'
+        ? "Intentionally skipped — onsite/non-remote location (you're remote-only), so not scored"
+        : 'Intentionally skipped — not a product-management role, so not scored';
+      return `<span class="gate-chip" title="${escHtml(why)}">${label}</span>`;
+    }
+    return '—';
+  }
+  const s = Math.round(job.filter_score);
+  let cls = 'score-low';
+  if (s >= 80) cls = 'score-high';
+  else if (s >= 60) cls = 'score-mid';
+  let title;
+  if (job.filter_source === 'tailored') {
+    // Post-tailor the stored filter_score is the tailored doc's LITERAL
+    // must-have coverage — not the judged ceiling the alert/auto-tailor
+    // gates evaluated. Surface that frozen ceiling so a post-tailor drop
+    // below 60 can't read as a gate misfire.
+    const ceil = job.filter_score_master != null ? Math.round(job.filter_score_master) : null;
+    title = 'Filter Match (tailored) — what the tailored resume literally scores against this screen'
+      + (ceil != null ? ` — selection gates used the pre-tailor ceiling ${ceil}` : '');
+  } else {
+    title = 'Filter Match (ceiling) — what a truthful tailored resume could score against this screen';
+  }
+  return `<span class="score-badge ${cls}" title="${title}">${s}</span>`;
+}
+
+function sourceBadge(source) {
+  const src = (source || '').toLowerCase();
+  const cls = `source-${src}` ;
+  const label = src.charAt(0).toUpperCase() + src.slice(1);
+  return `<span class="source-badge ${cls}">${label}</span>`;
+}
+
+function salaryDisplay(job) {
+  if (job.salary_min || job.salary_max) {
+    return `<span class="salary-text has-salary">${salaryDisplayText(job)}</span>`;
+  }
+  if (job.salary_est_min || job.salary_est_max) {
+    return `<span class="salary-text est-salary" title="Claude-estimated total comp — not posted by the employer">~${estDisplayText(job)}</span>`;
+  }
+  return `<span class="salary-text">—</span>`;
+}
+
+function estDisplayText(job) {
+  const min = job.salary_est_min, max = job.salary_est_max;
+  if (min && max && min !== max) {
+    return `$${(min/1000).toFixed(0)}k–$${(max/1000).toFixed(0)}k est`;
+  }
+  const v = max || min;
+  return v ? `$${(v/1000).toFixed(0)}k est` : '';
+}
+
+function salaryDetailText(job) {
+  if (job.salary_min || job.salary_max) return salaryDisplayText(job);
+  if (job.salary_est_min || job.salary_est_max) {
+    return `Not listed · ~${estDisplayText(job)} <span style="color:var(--text-faint)">(Claude estimate)</span>`;
+  }
+  return 'Not listed';
+}
+
+function salaryDisplayText(job) {
+  const min = job.salary_min;
+  const max = job.salary_max;
+  if (min && max && min !== max) {
+    return `$${(min/1000).toFixed(0)}k–$${(max/1000).toFixed(0)}k`;
+  }
+  if (min) return `$${(min/1000).toFixed(0)}k+`;
+  if (max) return `up to $${(max/1000).toFixed(0)}k`;
+  return 'Not listed';
+}
+
+function statusSelect(job) {
+  const options = [
+    { value: 'new', label: 'New' },
+    { value: 'saved', label: 'Saved' },
+    { value: 'applied', label: 'Applied' },
+    { value: 'not_interested', label: 'Not Interested' },
+  ];
+  const status = job.status || 'new';
+  const statusClass = `status-${status}`;
+  const opts = options.map(o =>
+    `<option value="${o.value}" ${o.value === status ? 'selected' : ''}>${o.label}</option>`
+  ).join('');
+  return `<select class="status-select ${statusClass}"
+    onchange="updateStatus(${job.id}, this.value, this)"
+    title="Update status">${opts}</select>`;
+}
+
+function llmScoreBadge(score) {
+  if (score == null) return '—';
+  let color = 'var(--gray)';
+  let label = 'Moderate';
+  if (score >= 80) { color = 'var(--green)'; label = 'Strong Fit'; }
+  else if (score >= 60) { color = 'var(--yellow)'; label = 'Good Fit'; }
+  else if (score < 40) { color = 'var(--red)'; label = 'Weak Fit'; }
+  return `<strong style="color:${color};">${score}/100</strong> <span style="font-size:11px;color:${color};">${label}</span>`;
+}
+
+function metaRow(key, val) {
+  return `<div class="meta-item"><span class="meta-key">${key}</span><span class="meta-val">${val}</span></div>`;
+}
+
+function filterDetailRows(job) {
+  if (job.filter_score == null && job.filter_knockout !== 1) {
+    if (job.filter_gate) {
+      const detailWhy = job.filter_gate.kind === 'onsite'
+        ? 'Onsite / non-remote location — skipped before scoring (you\'re remote-only)'
+        : 'Not a product-management role — skipped before scoring';
+      return metaRow('Filter Match',
+        `${filterBadge(job)} <span style="font-size:11px;color:var(--text-faint);">${escHtml(detailWhy)}</span>`);
+    }
+    return '';
+  }
+  let rows = metaRow('Filter Match',
+    `${filterBadge(job)} <span style="font-size:11px;color:var(--text-faint);">${job.filter_source === 'tailored' ? 'tailored resume' : 'ceiling (inventory-judged)'}</span>`);
+  if (job.filter_source === 'tailored' && job.filter_score_master != null) {
+    const delta = Math.round(job.filter_score - job.filter_score_master);
+    rows += metaRow('Tailoring Δ', `${delta >= 0 ? '+' : ''}${delta} (ceiling ${Math.round(job.filter_score_master)})`);
+  }
+  let detail = null;
+  try { detail = JSON.parse(job.filter_json || 'null'); } catch (e) { detail = null; }
+  if (detail && detail.version === 2) {
+    const mhs = Array.isArray(detail.must_haves) ? detail.must_haves : [];
+    const evidenced = mhs.filter(m => m.verdict === 'evidenced');
+    const absent = mhs.filter(m => m.verdict === 'absent');
+    const credited = mhs.length - absent.length;
+    rows += metaRow('Coverage', `${credited} of ${mhs.length} met · ${evidenced.length} need tailoring into the resume`);
+    if (job.filter_knockout === 1 && detail.uncapped_score != null) {
+      rows += metaRow('Before KO cap', `${Math.round(detail.uncapped_score)}`);
+    }
+    const chip = (label, color) => `<span style="font-size:10px;border:1px solid ${color};color:${color};border-radius:8px;padding:0 6px;margin-right:4px;">${label}</span>`;
+    const line = (m) => {
+      if (m.verdict === 'explicit') return `${chip('explicit', 'var(--green, #3a3)')}${escHtml(m.term)}`;
+      if (m.verdict === 'evidenced') return `${chip('evidenced', 'var(--accent, #47a)')}${escHtml(m.term)} <span style="color:var(--text-faint);font-size:11px;">— ${escHtml(m.evidence || '')}</span>`;
+      return `${chip('absent', 'var(--red)')}${escHtml(m.term)}`;
+    };
+    if (mhs.length) {
+      rows += `<div class="explanation-box" style="margin-top:6px;"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px;">Requirements</span>${mhs.map(line).join('<br>')}</div>`;
+    }
+    const kos = Array.isArray(detail.knockouts) ? detail.knockouts : [];
+    if (kos.length) {
+      rows += `<div class="explanation-box" style="margin-top:6px;${kos.some(k => k.verdict === 'failed') ? 'border-color:var(--red);' : ''}"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px;">Knockouts</span>${kos.map(k => `${escHtml(k.verdict)} — ${escHtml(k.requirement)}${k.reason ? ` <span style="color:var(--text-faint);">(${escHtml(k.reason)})</span>` : ''}`).join('<br>')}</div>`;
+    }
+  } else if (detail) {
+    // v1 blob (pre-judge rows and post-tailor literal recomputes).
+    const missing = (Array.isArray(detail.must_haves) ? detail.must_haves : []).filter(m => !m.present && !m.verdict).map(m => m.term);
+    if (missing.length) {
+      rows += `<div class="explanation-box" style="margin-top:6px;"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px;">Missing must-haves</span>${escHtml(missing.join(', '))}</div>`;
+    }
+    const concerns = (Array.isArray(detail.knockouts) ? detail.knockouts : []).filter(k => k.verdict !== 'met');
+    if (concerns.length) {
+      rows += `<div class="explanation-box" style="margin-top:6px;border-color:var(--red);"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--red);display:block;margin-bottom:4px;">Knockout concerns</span>${concerns.map(k => `${escHtml(k.requirement)} — ${escHtml(k.verdict)}`).join('<br>')}</div>`;
+    }
+  }
+  return rows;
+}
+
+function compsRow(job) {
+  const c = job._comps;
+  if (!c || !c.count || c.median == null) return '';
+  const f = v => `$${(v / 1000).toFixed(0)}k`;
+  return metaRow('Market (180d)',
+    `<span title="Posted salaries of ${c.count} comparable ${c.bucket}-level ${c.local ? 'local' : 'remote/national'} jobs in your own database">` +
+    `${f(c.p25)}–${f(c.p75)} · med <strong>${f(c.median)}</strong> (n=${c.count})</span>`);
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '—';
+  // Try to parse ISO or natural dates
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime())) {
+    const now = new Date();
+    const diffDays = Math.floor((now - d) / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+  return dateStr.substring(0, 10);
+}
+
+function formatAddedDate(createdAt) {
+  // The Added column must display its own sort key: when the row was
+  // added (jobs.created_at) — NOT the employer's posting date, which can
+  // be weeks older than the scrape that captured it. created_at is SQLite
+  // CURRENT_TIMESTAMP: UTC with a space separator ("YYYY-MM-DD HH:MM:SS"),
+  // which Safari won't parse and Chrome would misread as local time —
+  // normalize to ISO-UTC first. Render with sessionDayLabel (calendar
+  // days), NOT formatDate's rolling-24h window, so a cell can never
+  // disagree with its run divider about what day it is.
+  if (!createdAt) return '—';
+  const d = new Date(createdAt.includes('T') ? createdAt : createdAt.replace(' ', 'T') + 'Z');
+  return isNaN(d.getTime()) ? formatDate(createdAt) : sessionDayLabel(d);
+}
+
+function sessionDayLabel(d) {
+  // Day part for session dividers: exactly Today / Yesterday / "Jul 8"
+  // (never formatDate's "Nd ago" form — see the session-markers spec).
+  const startOfDay = dt => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+  const diffDays = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86400000);
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function sessionLabel(runId, count) {
+  const jobsTxt = `${count} job${count === 1 ? '' : 's'}`;
+  if (runId == null) return `Earlier · ${jobsTxt}`;
+  const run = state.runsById[runId];
+  if (!run || !run.started_at) return `Run #${runId} · ${jobsTxt}`;
+  const d = new Date(run.started_at);   // local-time ISO string (no Z suffix)
+  if (isNaN(d.getTime())) return `Run #${runId} · ${jobsTxt}`;
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return `${sessionDayLabel(d)} · ${time} run · ${jobsTxt}`;
+}
+
+function addedDayKey(job) {
+  // Local-calendar-day start (ms) of created_at, cached on the job
+  // object (same `_` convention as _comps/_tailorHistory; jobs are
+  // replaced wholesale on refresh, so the cache can't go stale).
+  // created_at is SQLite UTC "YYYY-MM-DD HH:MM:SS" — normalize exactly
+  // like formatAddedDate so a divider can never disagree with its
+  // cells. -1 sentinel: missing/unparseable created_at groups at the
+  // "oldest" end, like NULL run_id in the run view.
+  if (job._dayKey !== undefined) return job._dayKey;
+  let key = -1;
+  const ca = job.created_at;
+  if (ca) {
+    const d = new Date(ca.includes('T') ? ca : ca.replace(' ', 'T') + 'Z');
+    if (!isNaN(d.getTime())) {
+      key = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    }
+  }
+  job._dayKey = key;
+  return key;
+}
+
+function dayGroupLabel(job, count) {
+  const jobsTxt = `${count} job${count === 1 ? '' : 's'}`;
+  const key = addedDayKey(job);
+  if (key === -1) return `Earlier · ${jobsTxt}`;
+  return `${sessionDayLabel(new Date(key))} · ${jobsTxt}`;
+}
+
+function freshDot(job) {
+  if (job.status !== 'new' || !job.date_posted) return '';
+  const d = Date.parse(job.date_posted);
+  if (isNaN(d)) return '';
+  const ageDays = (Date.now() - d) / 86400000;
+  return ageDays <= 7
+    ? ' <span class="fresh-dot" title="Posted within 7 days — early applications get seen">&#x25CF;</span>'
+    : '';
+}
+
+function decodeStoredEntities(str) {
+  // Decode HTML entities that may be stored in the DB (e.g. &amp; → &).
+  // textarea is safe — scripts and event handlers don't execute inside it.
+  const el = document.createElement('textarea');
+  el.innerHTML = str;
+  return el.value;
+}
+
+function linkifyText(text) {
+  // Turn bare URLs into clickable links. text is already HTML-escaped at this
+  // point so URLs appear as plain characters — match them and wrap in <a>.
+  return text.replace(
+    /(https?:\/\/[^\s<>"']+)/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+  );
+}
+
+function formatDescription(desc) {
+  if (!desc) return '<em style="color:var(--text-faint)">No description available.</em>';
+
+  // Truncate long descriptions
+  const truncated = desc.length > 3000 ? desc.substring(0, 3000) + '...' : desc;
+
+  // Decode any stored HTML entities first (handles legacy DB rows)
+  const decoded = decodeStoredEntities(truncated);
+
+  // Split into lines for structured rendering
+  const rawLines = decoded.split('\n');
+  const bulletRe = /^\s*([•\-\*\u2022\u25cf]|\d+[\.\)])\s+/;
+
+  const blocks = [];   // array of { type: 'ul'|'p', items: string[] }
+  let currentList = null;
+
+  for (let i = 0; i < rawLines.length; i++) {
+    const line = rawLines[i];
+    const trimmed = line.trim();
+
+    if (trimmed === '') {
+      // Blank line — close any open list, signal paragraph break
+      if (currentList) { blocks.push(currentList); currentList = null; }
+      // Only add a paragraph break if the last block wasn't already a break
+      if (blocks.length && blocks[blocks.length - 1].type !== 'break') {
+        blocks.push({ type: 'break' });
+      }
+      continue;
+    }
+
+    if (bulletRe.test(trimmed)) {
+      // Bullet or numbered list item
+      if (!currentList) { currentList = { type: 'ul', items: [] }; }
+      currentList.items.push(escHtml(trimmed.replace(bulletRe, '')));
+    } else {
+      // Regular text line — close any open list first
+      if (currentList) { blocks.push(currentList); currentList = null; }
+      // Append to previous paragraph block or start a new one
+      if (blocks.length && blocks[blocks.length - 1].type === 'p') {
+        blocks[blocks.length - 1].items[0] += ' ' + escHtml(trimmed);
+      } else {
+        blocks.push({ type: 'p', items: [escHtml(trimmed)] });
+      }
+    }
+  }
+  if (currentList) blocks.push(currentList);
+
+  // Render blocks to HTML
+  let html = '';
+  for (const block of blocks) {
+    if (block.type === 'break') continue;  // handled by p margin
+    if (block.type === 'ul') {
+      html += '<ul>' + block.items.map(it => `<li>${linkifyText(it)}</li>`).join('') + '</ul>';
+    } else {
+      const text = linkifyText(block.items[0]);
+      html += `<p>${text}</p>`;
+    }
+  }
+
+  return html || '<em style="color:var(--text-faint)">No description available.</em>';
+}
+
+// ============================================================
+// Interactions
+// ============================================================
+async function toggleDetail(job) {
+  if (state.expandedJobId === job.id) {
+    state.expandedJobId = null;
+    renderTable();
+    return;
+  }
+  state.expandedJobId = job.id;
+  if (job.description === undefined) {
+    try {
+      const full = await apiFetch(`/api/jobs/${job.id}`);
+      Object.assign(job, full);
+      job._detailError = false;
+    } catch (e) {
+      // Leave description undefined so the next expand retries instead of
+      // permanently caching the failure as an empty description.
+      job._detailError = true;
+    }
+  }
+  if (job._comps === undefined) {
+    try {
+      job._comps = await apiFetch(`/api/jobs/${job.id}/comps?profile=${encodeURIComponent(currentProfile)}`);
+    } catch (e) {
+      job._comps = null;
+    }
+  }
+  if (job.tailored_at && !state.tailorTasks[job.id] && job._tailorHistory === undefined) {
+    try {
+      const hist = await apiFetch(`/api/tailor/history?job_id=${job.id}`);
+      job._tailorHistory = (Array.isArray(hist) && hist.length) ? hist[0] : null;
+    } catch (e) {
+      job._tailorHistory = null;
+    }
+  }
+  renderTable();
+}
+
+async function updateStatus(jobId, newStatus, selectEl) {
+  const originalValue = selectEl.dataset.originalValue || selectEl.value;
+  selectEl.dataset.originalValue = originalValue;
+
+  try {
+    await apiPatch(`/api/jobs/${jobId}/status`, { status: newStatus });
+    // Update in local state
+    const job = state.allJobs.find(j => j.id === jobId);
+    if (job) {
+      job.status = newStatus;
+    }
+    selectEl.className = `status-select status-${newStatus}`;
+    showToast(`Status updated to "${newStatus}"`, 'success');
+
+    // Re-apply filters in case status filter is active
+    if (state.statusFilter !== '') {
+      applyFilters();
+    }
+  } catch (e) {
+    console.error('Failed to update status:', e);
+    selectEl.value = originalValue;
+    showToast('Failed to update status', 'error');
+  }
+}
+
+async function dismissJob(jobId) {
+  try {
+    const updated = await apiPatch(`/api/jobs/${jobId}/dismiss`, {});
+    const job = state.allJobs.find(j => j.id === jobId);
+    if (job) job.dismissed = 1;
+    showToast('Job dismissed', 'success');
+    // Remove from view if not showing dismissed, otherwise re-render to show restore button
+    if (!state.showDismissed) {
+      state.allJobs = state.allJobs.filter(j => j.id !== jobId);
+    }
+    applyFilters();
+  } catch (e) {
+    console.error('Failed to dismiss job:', e);
+    showToast('Failed to dismiss job', 'error');
+  }
+}
+
+async function undismissJob(jobId) {
+  try {
+    await apiPatch(`/api/jobs/${jobId}/undismiss`, {});
+    const job = state.allJobs.find(j => j.id === jobId);
+    if (job) job.dismissed = 0;
+    showToast('Job restored', 'success');
+    applyFilters();
+  } catch (e) {
+    console.error('Failed to restore job:', e);
+    showToast('Failed to restore job', 'error');
+  }
+}
+
+function toggleShowDismissed(btn) {
+  state.showDismissed = !state.showDismissed;
+  btn.classList.toggle('priority-active', state.showDismissed);
+  loadData();
+}
+
+function togglePriorityFilter(btn) {
+  state.priorityFilter = !state.priorityFilter;
+  if (state.priorityFilter) {
+    btn.classList.add('priority-active');
+  } else {
+    btn.classList.remove('priority-active');
+  }
+  applyFilters();
+}
+
+function toggleOffersFilter(btn) {
+  state.offerFilter = !state.offerFilter;
+  btn.classList.toggle('priority-active', state.offerFilter);
+  applyFilters();
+}
+
+function toggleLocalFilter(btn) {
+  state.localFilter = !state.localFilter;
+  btn.classList.toggle('active', state.localFilter);
+  applyFilters();
+}
+
+function toggleLatestRunFilter(btn) {
+  state.latestRunFilter = !state.latestRunFilter;
+  btn.classList.toggle('active', state.latestRunFilter);
+  applyFilters();
+}
+
+function setScoreFilter(btn, value) {
+  document.querySelectorAll('#score-filters .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.scoreFilter = value;
+  applyFilters();
+}
+
+function setFilterScoreFilter(btn, value) {
+  document.querySelectorAll('#filter-score-filters .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.filterScoreFilter = value;
+  applyFilters();
+}
+
+function setGroupBy(btn, value) {
+  document.querySelectorAll('#group-by-filters .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.groupBy = value;
+  if (state.sortBy !== 'added') {
+    // Grouping is a flavor of the Added view — jump there (approved
+    // decision), mirroring setSortBy's fresh-arrival defaults.
+    state.sortBy = 'added';
+    state.sortDir = 'desc';
+    updateSortArrows();
+  }
+  applyFilters();
+}
+
+function setHideKnockouts(btn, val) {
+  state.hideKnockouts = val;
+  document.querySelectorAll('#knockout-filters .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  applyFilters();
+}
+
+function setStatusFilter(btn, value) {
+  document.querySelectorAll('#status-filters .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.statusFilter = value;
+  applyFilters();
+}
+
+function filterBySearch() {
+  state.searchQuery = document.getElementById('search-input').value.trim();
+  applyFilters();
+}
+
+// Columns that default to descending when first clicked.
+// (the date column is handled by its own branch in setSortBy, so it never
+// consults this set.)
+const SORT_DESC_DEFAULT = new Set(['score', 'health', 'salary', 'filter']);
+
+function setSortBy(col) {
+  if (col === 'date_posted') {
+    // The date column drives the Added (session) view — the default sort.
+    // Clicking it while active reverses direction like any other column;
+    // arriving from another column starts at newest-first. (This replaces
+    // the old posting-date ↔ added mode cycle, which could never reverse;
+    // the 'date_posted' comparator case remains for possible future use.)
+    if (state.sortBy === 'added' || state.sortBy === 'date_posted') {
+      state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      state.sortBy = 'added';
+      state.sortDir = 'desc';
+    }
+  } else if (state.sortBy === col) {
+    state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    state.sortBy = col;
+    state.sortDir = SORT_DESC_DEFAULT.has(col) ? 'desc' : 'asc';
+  }
+  updateSortArrows();
+  applyFilters();
+}
+
+function updateSortArrows() {
+  // Map sort key -> th element id suffix
+  const colMap = {
+    score:       'score',
+    filter:      'filter',
+    title:       'title',
+    company:     'company',
+    location:    'location',
+    health:      'health',
+    salary:      'salary',
+    source:      'source',
+    date_posted: 'date',
+    added:       'date',
+  };
+
+  // Clear all table header arrows and sorted highlights
+  Object.values(colMap).forEach(id => {
+    const arrow = document.getElementById(`arrow-${id}`);
+    if (arrow) arrow.className = 'sort-arrow';
+    const th = document.getElementById(`th-${id}`);
+    if (th) th.classList.remove('sorted');
+  });
+
+  // Apply to active table column
+  const activeId = colMap[state.sortBy];
+  if (activeId) {
+    const arrow = document.getElementById(`arrow-${activeId}`);
+    if (arrow) arrow.className = `sort-arrow ${state.sortDir}`;
+    const th = document.getElementById(`th-${activeId}`);
+    if (th) th.classList.add('sorted');
+  }
+
+  // ── Sync mobile sort pills ──
+  const msortMap = {
+    score:       'msort-score',
+    date_posted: 'msort-date',
+    added:       'msort-date',
+    company:     'msort-company',
+    salary:      'msort-salary',
+    health:      'msort-health',
+  };
+  // Reset all pills
+  Object.values(msortMap).forEach(btnId => {
+    const btn = document.getElementById(btnId);
+    if (btn) btn.classList.remove('active');
+    const arrowEl = document.getElementById(btnId.replace('msort-', 'msort-arrow-'));
+    if (arrowEl) arrowEl.textContent = '';
+  });
+  // Activate current pill
+  const activeMsort = msortMap[state.sortBy];
+  if (activeMsort) {
+    const btn = document.getElementById(activeMsort);
+    if (btn) btn.classList.add('active');
+    const arrowEl = document.getElementById(activeMsort.replace('msort-', 'msort-arrow-'));
+    if (arrowEl) arrowEl.textContent = state.sortDir === 'asc' ? '▲' : '▼';
+  }
+
+  // Date header doubles as the Added (session view) toggle — relabel it
+  const dateMode = state.sortBy === 'added' ? 'Added' : 'Date';
+  setText('th-date-label', dateMode);
+  setText('msort-date-label', dateMode);
+}
+
+// ============================================================
+// Utilities
+// ============================================================
+function showLoading(show) {
+  const loading = document.getElementById('loading');
+  const table = document.getElementById('jobs-table');
+  const empty = document.getElementById('empty-state');
+  if (show) {
+    loading.style.display = 'block';
+    table.style.display = 'none';
+    empty.style.display = 'none';
+  }
+}
+
+function showRefreshIndicator(show) {
+  document.getElementById('refresh-indicator').style.display = show ? 'inline-block' : 'none';
+}
+
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function escAttr(str) {
+  return String(str || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+let toastTimer = null;
+function showToast(message, type = 'info') {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.className = `show ${type}`;
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toast.className = '';
+  }, 3000);
+}
+
+// ============================================================
+// Resume Tailoring
+// ============================================================
+
+// --- Auto-tailor toggle (persisted in the settings table; the daily run
+// reads the same key before its post-run pass) ---
+async function loadAutoTailorSetting() {
+  try {
+    const res = await fetch('/api/settings/auto-tailor');
+    if (!res.ok) return;
+    state.autoTailorEnabled = !!(await res.json()).enabled;
+  } catch (e) { return; }  // leave null; button stays "Auto: …"
+  renderAutoTailorToggle();
+}
+
+function renderAutoTailorToggle() {
+  const btn = document.getElementById('auto-tailor-toggle');
+  if (!btn || state.autoTailorEnabled === null) return;
+  btn.innerHTML = `✂ Auto: ${state.autoTailorEnabled ? 'ON' : 'OFF'}`;
+  btn.classList.toggle('off', !state.autoTailorEnabled);
+}
+
+async function toggleAutoTailor() {
+  if (state.autoTailorEnabled === null) return;  // initial GET hasn't landed
+  try {
+    const res = await fetch('/api/settings/auto-tailor', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: !state.autoTailorEnabled }),
+    });
+    if (!res.ok) return;
+    state.autoTailorEnabled = !!(await res.json()).enabled;
+  } catch (e) { return; }
+  renderAutoTailorToggle();
+}
+
+function tailorActionBtn(job) {
+  const task = state.tailorTasks[job.id];
+  if (!task) {
+    if (job.tailored_at) {
+      return `<span class="btn-tailor-done" title="Tailored ${escAttr(formatDate(job.tailored_at))} — expand row to view">&#x2713;</span>${_issueBadge(job)}`;
+    }
+    // Auto-tailor gave up on this job (2 failed attempts) — surface it so a
+    // halted auto path is never mistaken for "no qualifying jobs". Manual ✂
+    // remains the retry path and clears the badge on success via tailored_at.
+    const failedBadge = (job.auto_tailor_attempts || 0) >= 2
+      ? `<span class="auto-tailor-failed" title="Auto-tailor failed twice — tailor manually">&#x26A0;</span>`
+      : '';
+    return `${failedBadge}<button class="btn-tailor" onclick="event.stopPropagation();tailorResume(${job.id})" title="Tailor resume for this job">&#x2702;</button>`;
+  }
+  if (task.status === 'pending' || task.status === 'running') {
+    return `<span class="btn-tailor-running" title="${escAttr(task.progress || 'Working...')}">&#x21BB;</span>`;
+  }
+  if (task.status === 'completed') {
+    return `<span class="btn-tailor-done" title="Resume tailored — expand row to view">&#x2713;</span>${_issueBadge(job)}`;
+  }
+  if (task.status === 'failed') {
+    return `<button class="btn-tailor-error" onclick="event.stopPropagation();retryTailor(${job.id})" title="Tailoring failed — click to retry&#10;${escAttr(task.error || '')}">&#x21BA;</button>`;
+  }
+  return '';
+}
+
+function tailorResultPanel(job) {
+  const task = state.tailorTasks[job.id];
+  if (!task) {
+    if (job._tailorHistory) return _tailorHistoryPanel(job);
+    if (job.tailored_at && job.tailored_resume_url) return _tailorFallbackPanel(job);
+    return '';
+  }
+
+  if (task.status === 'pending' || task.status === 'running') {
+    return `<div class="tailor-panel tailor-panel-running">
+      <h4>Tailoring Resume</h4>
+      <div class="tailor-progress">
+        <span class="tailor-spinner">&#x21BB;</span>
+        <span>${escHtml(task.progress || 'Working...')}</span>
+      </div>
+    </div>`;
+  }
+
+  if (task.status === 'completed' && task.result) {
+    const r = task.result;
+    return _tailorDoneBody({
+      headerHtml: `Tailored Resume &mdash; ${escHtml(r.title || '')} @ ${escHtml(r.company || '')}`,
+      docUrl: r.google_doc_url,
+      downloadUrl: `/api/tailor/download/${escAttr(task.taskId)}`,
+      atsScore: r.ats_score,
+      keywordsMatched: r.keywords_matched,
+      keywordsTotal: r.keywords_total,
+      estCost: r.est_cost,
+      issues: r.issues,
+      issueFactsHtml: _issueFactsLine(r.issue_facts, false),
+    });
+  }
+
+  if (task.status === 'failed') {
+    const hint = _tailorErrorHint(task);
+    const hintHtml = hint ? `<div class="tailor-error-hint">${hint}</div>` : '';
+    const prevDocHtml = (job.tailored_at && job.tailored_resume_url)
+      ? `<div class="tailor-links"><a href="${escAttr(job.tailored_resume_url)}" target="_blank" rel="noopener noreferrer"><button class="btn btn-sm btn-ghost">&#x1F4C4; Previous tailored doc</button></a></div>`
+      : '';
+    return `<div class="tailor-panel tailor-panel-error">
+      <h4>Tailoring Failed</h4>
+      <div class="tailor-error-msg">${escHtml(task.error || 'Unknown error')}</div>
+      ${hintHtml}
+      <button class="btn btn-sm" onclick="retryTailor(${job.id})">&#x21BA; Retry</button>
+      ${prevDocHtml}
+    </div>`;
+  }
+
+  return '';
+}
+
+// Shared body for every green "done" tailor panel (live-completed +
+// historical). Callers normalize their differing fields (data source,
+// download route, header, extra buttons); this renders the common shell.
+// docUrl is external data → escAttr'd here; downloadUrl is a caller-built
+// route with its id already escAttr'd → inserted raw (no double-escape).
+// issueFactsHtml is caller-built via _issueFactsLine (already escaped) →
+// inserted raw; it mirrors the row-header ⚠ badge inside the panel.
+function _tailorDoneBody({ headerHtml, docUrl, downloadUrl, atsScore, keywordsMatched, keywordsTotal, estCost, issues, extraButtons, issueFactsHtml }) {
+  const atsColor = atsScore >= 80 ? 'var(--green)' : atsScore >= 60 ? 'var(--yellow)' : 'var(--red)';
+  const list = issues || [];
+  const issuesHtml = list.length
+    ? `<div class="tailor-issues">${list.map(i => `<div class="tailor-issue">&#x26A0; ${escHtml(i)}</div>`).join('')}</div>`
+    : '';
+  const costHtml = estCost != null
+    ? `<span style="color:var(--text-faint);margin-left:12px;">Est. cost:</span><strong style="margin-left:5px;">$${Number(estCost).toFixed(4)}</strong>`
+    : '';
+  return `<div class="tailor-panel tailor-panel-done">
+    <h4>${headerHtml}</h4>
+    <div class="tailor-links">
+      <a href="${escAttr(docUrl)}" target="_blank" rel="noopener noreferrer">
+        <button class="btn btn-sm">&#x1F4C4; Open Google Doc</button>
+      </a>
+      <a href="${downloadUrl}">
+        <button class="btn btn-sm btn-ghost">&#x2B07; Download .docx</button>
+      </a>
+      ${extraButtons || ''}
+    </div>
+    <div class="tailor-stats">
+      <span style="color:var(--text-faint)">ATS Score:</span>
+      <strong style="color:${atsColor};margin-left:5px;">${atsScore}/100</strong>
+      <span style="color:var(--text-faint);margin-left:12px;">Keywords:</span>
+      <strong style="margin-left:5px;">${keywordsMatched}/${keywordsTotal}</strong>
+      ${costHtml}
+    </div>
+    ${issuesHtml}
+    ${issueFactsHtml || ''}
+  </div>`;
+}
+
+// Facts → badge + panel line. Wording lives HERE (frontend composes from
+// raw facts; changing copy never touches stored rows). Trigger rule:
+// reverted edits, missing must-haves, or unverified layout — `modified`
+// alone never badges. The badge and the panel line both compose from
+// _issueParts so the two can never disagree.
+function _parseIssueFacts(json) {
+  try { return json ? JSON.parse(json) : null; }
+  catch (e) { return null; }
+}
+
+function _issueParts(f) {
+  if (!f) return [];
+  const parts = [];
+  if (f.reverted) parts.push(`${f.reverted} edit${f.reverted > 1 ? 's' : ''} reverted`);
+  const mt = Array.isArray(f.missing_terms) ? f.missing_terms : [];
+  if (mt.length) parts.push(`${mt.length} must-have${mt.length > 1 ? 's' : ''} missing`);
+  if (f.layout_unverified) parts.push('layout unverified');
+  return parts;
+}
+
+function _issueBadge(job) {
+  const parts = _issueParts(_parseIssueFacts(job.tailor_issue_json));
+  if (!parts.length) return '';
+  return `<span class="tailor-issue-badge" title="${escAttr(parts.join(' · '))} — expand row and open View changes">&#x26A0;</span>`;
+}
+
+// The badge's facts rendered inside the done panel. viewChangesHint: only
+// panels that append a View changes section have somewhere to point.
+function _issueFactsLine(f, viewChangesHint) {
+  const parts = _issueParts(f);
+  if (!parts.length) return '';
+  const hint = viewChangesHint ? ' — see View changes' : '';
+  return `<div class="tailor-issue-facts">&#x26A0; ${escHtml(parts.join(' · '))}${hint}</div>`;
+}
+
+// Historical panel — from the most recent tailor_history record
+// (job._tailorHistory, fetched lazily in toggleDetail). Downloads via the
+// history endpoint. Re-tailor button (extraButtons) is added in Task 3.
+function _tailorHistoryPanel(job) {
+  const r = job._tailorHistory;
+  const header = `Tailored Resume &mdash; ${escHtml(r.job_title || job.title || '')} @ ${escHtml(r.company || job.company || '')} <span style="color:var(--text-faint);font-weight:normal;">(${escHtml(formatDate(job.tailored_at))})</span>`;
+  return _tailorDoneBody({
+    headerHtml: header,
+    docUrl: r.google_doc_url || job.tailored_resume_url,
+    downloadUrl: `/api/tailor/history/download/${escAttr(String(r.id))}`,
+    atsScore: r.ats_score,
+    keywordsMatched: r.keywords_matched,
+    keywordsTotal: r.keywords_total,
+    estCost: r.est_cost,
+    // history stores full ATS issue objects {severity, description, ...}; the live
+    // task path pre-flattens to critical description strings server-side. Flatten
+    // to match — _tailorDoneBody expects strings (a raw object renders [object Object]).
+    issues: (r.ats_issues || []).filter(i => i && i.severity === 'critical').map(i => i.description),
+    extraButtons: _reTailorBtn(job),
+    issueFactsHtml: _issueFactsLine(_parseIssueFacts(job.tailor_issue_json), true),
+  }) + _viewChangesSection(r.id, 'row');
+}
+
+// Minimal fallback when the history fetch failed/returned empty but the
+// job row itself carries the doc URL — the ✓ never points at nothing.
+// No stats (we have none) — so this does NOT use _tailorDoneBody.
+function _tailorFallbackPanel(job) {
+  return `<div class="tailor-panel tailor-panel-done">
+    <h4>Tailored Resume <span style="color:var(--text-faint);font-weight:normal;">(${escHtml(formatDate(job.tailored_at))})</span></h4>
+    <div class="tailor-links">
+      <a href="${escAttr(job.tailored_resume_url)}" target="_blank" rel="noopener noreferrer">
+        <button class="btn btn-sm">&#x1F4C4; Open Google Doc</button>
+      </a>
+      ${_reTailorBtn(job)}
+    </div>
+    ${_issueFactsLine(_parseIssueFacts(job.tailor_issue_json), false)}
+  </div>`;
+}
+
+// Re-tailor button — re-runs the pipeline via the existing tailorResume().
+// No stopPropagation: the detail row has no click handler (only the main
+// row does), so the click won't bubble into a row toggle.
+function _reTailorBtn(job) {
+  return `<button class="btn btn-sm btn-ghost" onclick="tailorResume(${job.id})" title="Re-run tailoring for this job">&#x2702; Re-tailor</button>`;
+}
+
+// Return a user-friendly action hint based on the error category, or null if none.
+function _tailorErrorHint(task) {
+  const cat = task.error_category;
+  if (cat === 'auth_error') {
+    return 'Ensure the Claude Code CLI is installed and you\'re logged in — run <code>claude auth status</code> to check.';
+  }
+  if (cat === 'jd_extraction_error') {
+    return 'Try a supported job board (Greenhouse, Lever, Ashby, etc.) or paste the JD manually (coming soon).';
+  }
+  if (cat === 'google_api_error') {
+    return 'Run <code>python scripts/setup_google_auth.py</code> to re-authenticate with Google.';
+  }
+  if (cat === 'timeout_error') {
+    return 'The pipeline took over 10 minutes. Try again — if it keeps timing out, check server logs.';
+  }
+  return null;
+}
+
+function _startTailorPolling(taskId, jobId) {
+  if (_tailorPolls[taskId]) return;
+  const _pollStart = Date.now();
+  const _MAX_POLL_MS = 11 * 60 * 1000; // 11 minutes client-side limit (just beyond backend's 10-min watchdog)
+
+  _tailorPolls[taskId] = setInterval(async () => {
+    // Client-side timeout: if still running after 11 min, stop polling and show warning.
+    if (Date.now() - _pollStart > _MAX_POLL_MS) {
+      clearInterval(_tailorPolls[taskId]);
+      delete _tailorPolls[taskId];
+      state.tailorTasks[jobId] = {
+        ...state.tailorTasks[jobId],
+        status: 'failed',
+        error_category: 'timeout_error',
+        error: 'No response after 11 minutes. The server may still be processing — refresh the page to check.',
+        progress: 'Client-side timeout',
+      };
+      applyFilters();
+      showToast('Tailoring timed out. Click retry when ready.', 'error');
+      return;
+    }
+
+    try {
+      const data = await apiFetch(`/api/tailor/status/${taskId}`);
+      state.tailorTasks[jobId] = {
+        taskId: data.task_id,
+        status: data.status,
+        progress: data.progress,
+        result: data.result,
+        error: data.error,
+        error_category: data.error_category || null,
+      };
+      // Only re-render if something visible changed
+      applyFilters();
+      if (data.status === 'completed' || data.status === 'failed') {
+        clearInterval(_tailorPolls[taskId]);
+        delete _tailorPolls[taskId];
+        if (data.status === 'completed') {
+          const r = data.result;
+          showToast(`Resume tailored! ATS: ${r ? r.ats_score : '?'}/100`, 'success');
+        } else {
+          showToast(`Tailoring failed: ${data.error || 'Unknown error'}`, 'error');
+        }
+      }
+    } catch (e) {
+      // Ignore transient poll errors
+    }
+  }, 2000);
+}
+
+async function tailorResume(jobId) {
+  // Optimistically set pending so button updates immediately
+  state.tailorTasks[jobId] = { taskId: null, status: 'pending', progress: 'Starting...', result: null, error: null };
+  applyFilters();
+
+  try {
+    const resp = await fetch('/api/tailor', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job_id: jobId }),
+    });
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({}));
+      throw new Error(body.detail || `Server error ${resp.status}`);
+    }
+    const data = await resp.json();
+    state.tailorTasks[jobId].taskId = data.task_id;
+    _startTailorPolling(data.task_id, jobId);
+  } catch (e) {
+    state.tailorTasks[jobId] = { taskId: null, status: 'failed', progress: 'Failed to start', result: null, error: e.message };
+    applyFilters();
+    showToast(`Failed to start tailoring: ${e.message}`, 'error');
+  }
+}
+
+async function retryTailor(jobId) {
+  const task = state.tailorTasks[jobId];
+  if (!task) { await tailorResume(jobId); return; }
+
+  // If the old poll is still registered, clear it
+  if (task.taskId && _tailorPolls[task.taskId]) {
+    clearInterval(_tailorPolls[task.taskId]);
+    delete _tailorPolls[task.taskId];
+  }
+
+  if (task.taskId) {
+    // Use server-side retry (reuses same task_id)
+    state.tailorTasks[jobId] = { ...task, status: 'pending', progress: 'Retrying...', result: null, error: null };
+    applyFilters();
+    try {
+      const resp = await fetch(`/api/tailor/retry/${task.taskId}`, { method: 'POST' });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        throw new Error(body.detail || `Server error ${resp.status}`);
+      }
+      _startTailorPolling(task.taskId, jobId);
+    } catch (e) {
+      state.tailorTasks[jobId] = { ...task, status: 'failed', error: e.message };
+      applyFilters();
+      showToast(`Retry failed: ${e.message}`, 'error');
+    }
+  } else {
+    await tailorResume(jobId);
+  }
+}
+
+// ============================================================
+// Tailor History Panel
+// ============================================================
+
+let _historyData = [];
+let _historyExpanded = new Set();
+
+function openHistoryPanel() {
+  const overlay = document.getElementById('history-overlay');
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  loadHistory();
+}
+
+function closeHistoryPanel() {
+  const overlay = document.getElementById('history-overlay');
+  overlay.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function onHistoryOverlayClick(e) {
+  if (e.target === document.getElementById('history-overlay')) closeHistoryPanel();
+}
+
+async function loadHistory() {
+  const body = document.getElementById('history-body');
+  body.innerHTML = '<div class="history-loading"><div class="spinner"></div><div>Loading history...</div></div>';
+  try {
+    const data = await apiFetch('/api/tailor/history');
+    _historyData = data;
+    _historyExpanded.clear();
+    renderHistoryList(data);
+  } catch (e) {
+    body.innerHTML = `<div class="history-empty"><div class="empty-icon">&#x26A0;</div><p>Failed to load history: ${escHtml(e.message)}</p></div>`;
+  }
+}
+
+function renderHistoryList(records) {
+  const body = document.getElementById('history-body');
+  const countEl = document.getElementById('history-count');
+  countEl.textContent = records.length ? `(${records.length})` : '';
+
+  if (!records.length) {
+    body.innerHTML = '<div class="history-empty"><div class="empty-icon">&#x1F4CB;</div><p>No tailored resumes yet.<br>Tailor a resume from any job row to get started.</p></div>';
+    return;
+  }
+
+  body.innerHTML = records.map((r, idx) => renderHistoryItem(r, idx)).join('');
+}
+
+function renderHistoryItem(r, idx) {
+  const score = r.ats_score || 0;
+  const atsClass = score >= 80 ? 'history-ats-high' : score >= 60 ? 'history-ats-mid' : 'history-ats-low';
+  const dateStr = r.created_at ? fmtHistoryDate(r.created_at) : '—';
+  const kwMatched = r.keywords_matched || 0;
+  const kwTotal = r.keywords_total || 0;
+  const cost = r.est_cost ? `$${r.est_cost.toFixed(4)}` : '—';
+
+  return `<div class="history-item" id="history-item-${r.id}">
+    <div class="history-item-header" onclick="toggleHistoryItem(${r.id})">
+      <div class="history-ats-badge ${atsClass}">${score}</div>
+      <div>
+        <div class="history-item-title">${escHtml(r.job_title || 'Unknown Role')}</div>
+        <div class="history-item-company">${escHtml(r.company || '—')}</div>
+      </div>
+      <div class="history-item-meta">
+        <div class="history-meta-pill">&#x1F511; <strong>${kwMatched}/${kwTotal}</strong> keywords</div>
+        <div class="history-meta-pill">&#x1F4B0; <strong>${cost}</strong></div>
+      </div>
+      <div class="history-item-date">${dateStr}</div>
+      <div class="history-chevron">&#x25BE;</div>
+    </div>
+    <div class="history-detail" id="history-detail-${r.id}">
+      <div class="history-loading"><div class="spinner"></div><div>Loading detail...</div></div>
+    </div>
+  </div>`;
+}
+
+async function toggleHistoryItem(id) {
+  const item = document.getElementById(`history-item-${id}`);
+  const detail = document.getElementById(`history-detail-${id}`);
+
+  if (item.classList.contains('expanded')) {
+    item.classList.remove('expanded');
+    return;
+  }
+
+  item.classList.add('expanded');
+
+  // Only fetch if not already rendered
+  if (_historyExpanded.has(id)) return;
+  _historyExpanded.add(id);
+
+  try {
+    const r = await apiFetch(`/api/tailor/history/${id}`);
+    detail.innerHTML = renderHistoryDetail(r);
+  } catch (e) {
+    detail.innerHTML = `<p style="color:var(--red);font-size:12px;padding:8px;">Failed to load detail: ${escHtml(e.message)}</p>`;
+  }
+}
+
+function renderHistoryDetail(r) {
+  const issues = r.ats_issues || [];
+  const kwList = r.keywords_list || [];
+
+  const score = r.ats_score || 0;
+  const scoreClass = score >= 80 ? 'high' : score >= 60 ? 'mid' : 'low';
+  const passLabel = r.ats_passed
+    ? '<span class="ats-pass-badge pass">&#x2713; PASSED</span>'
+    : '<span class="ats-pass-badge fail">&#x2717; FAILED</span>';
+
+  // ATS issues
+  const issuesHtml = issues.length
+    ? issues.map(i => `<div class="ats-issue-row">
+        <span class="ats-issue-icon ${i.severity === 'critical' ? 'crit' : 'warn'}">${i.severity === 'critical' ? '&#x26A0;' : '&#x2022;'}</span>
+        <span>${escHtml(i.description)}</span>
+      </div>`).join('')
+    : '<div style="font-size:12px;color:var(--green);">&#x2713; No issues found</div>';
+
+  // Keywords matched/missing
+  const allKws = r.keywords_list || [];
+  // We know total from keywords_total; missing = priority keywords not in list
+  // For missing, we'd need the full priority list — approximate from keywords_total - matched
+  const missingCount = (r.keywords_total || 0) - (r.keywords_matched || 0);
+  const kwHtml = allKws.length
+    ? allKws.map(k => `<span class="kw-chip kw-matched">${escHtml(k)}</span>`).join('')
+    : '<span style="font-size:11px;color:var(--text-faint);">No keyword data</span>';
+
+  // Token / cost info
+  const inp = r.total_input_tokens ? r.total_input_tokens.toLocaleString() : '—';
+  const out = r.total_output_tokens ? r.total_output_tokens.toLocaleString() : '—';
+  const cost = r.est_cost ? `$${r.est_cost.toFixed(4)}` : '—';
+
+  // Action links
+  const docLink = r.google_doc_url
+    ? `<a class="btn btn-sm" href="${escAttr(r.google_doc_url)}" target="_blank" rel="noopener">&#x1F517; Open Doc</a>`
+    : '';
+  const dlLink = `<a class="btn btn-sm btn-ghost" href="/api/tailor/history/download/${r.id}">&#x2B07; Download .docx</a>`;
+
+  // Ground-truth diff on demand; renderEditsDiff intent cards remain only
+  // as the fallback inside loadTailorDiff.
+  const diffHtml = _viewChangesSection(r.id, 'hist');
+
+  return `<div class="history-detail-grid">
+    <div>
+      ${diffHtml}
+      <div class="history-action-links">${docLink}${dlLink}</div>
+    </div>
+    <div>
+      <!-- ATS Score -->
+      <div class="hd-section">
+        <div class="hd-section-title">ATS Score</div>
+        <div class="ats-score-big ${scoreClass}">${score}<span style="font-size:18px;font-weight:400;">/100</span></div>
+        ${passLabel}
+        <div>${issuesHtml}</div>
+      </div>
+
+      <!-- Keywords -->
+      <div class="hd-section">
+        <div class="hd-section-title">Keywords Matched (${r.keywords_matched || 0}/${r.keywords_total || 0})</div>
+        <div style="line-height:1.8;">${kwHtml}</div>
+        ${missingCount > 0 ? `<div style="font-size:11px;color:var(--text-faint);margin-top:6px;">+${missingCount} targeted but not matched</div>` : ''}
+      </div>
+
+      <!-- Cost -->
+      <div class="hd-section">
+        <div class="hd-section-title">API Usage</div>
+        <div class="history-cost-stat">Input tokens: ${inp}</div>
+        <div class="history-cost-stat">Output tokens: ${out}</div>
+        <div class="history-cost-stat" style="color:var(--text-muted);margin-top:4px;font-weight:500;">Est. cost: ${cost}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderEditsDiff(edits, masterText) {
+  if (!edits || typeof edits !== 'object') {
+    return '<div class="hd-section"><div class="hd-section-title">Edits</div><p style="font-size:12px;color:var(--text-faint);">No edit data available.</p></div>';
+  }
+
+  const parts = [];
+
+  // Helper to extract a section from master text
+  function extractMasterSection(keyword) {
+    if (!masterText) return '';
+    const lines = masterText.split('\n');
+    let inSection = false;
+    const collected = [];
+    for (const line of lines) {
+      const upper = line.trim().toUpperCase();
+      if (inSection) {
+        // Stop at next all-caps line that looks like a section header
+        if (upper === line.trim() && upper.length > 3 && upper === upper.replace(/[^A-Z\s&]/g, '').trim() && upper.length < 60 && line.trim() && !line.trim().includes('•') && !line.trim().includes('-')) {
+          break;
+        }
+        if (line.trim()) collected.push(line.trim());
+        if (collected.length >= 4) break;
+      } else if (line.trim().toUpperCase().includes(keyword.toUpperCase()) && line.trim() === line.trim().toUpperCase()) {
+        inSection = true;
+      }
+    }
+    return collected.join(' ');
+  }
+
+  // 1 — Title change
+  if (edits.title_line_replacement) {
+    const masterTitle = masterText ? (masterText.split('\n').find(l => l.trim().match(/manager|director|lead|engineer|analyst|designer|specialist|head of/i)) || '').trim() : '';
+    let titleDiff = '';
+    if (masterTitle && masterTitle.toLowerCase() !== edits.title_line_replacement.toLowerCase()) {
+      titleDiff = `<div class="diff-before">${escHtml(masterTitle)}</div>
+        <div class="diff-arrow">&#x2193;</div>
+        <div class="diff-after">${escHtml(edits.title_line_replacement)}</div>`;
+    } else {
+      titleDiff = `<div class="diff-new-only">${escHtml(edits.title_line_replacement)}</div>`;
+    }
+    parts.push(`<div class="hd-section"><div class="hd-section-title">Title Change</div>
+      <div class="diff-block">${titleDiff}</div></div>`);
+  }
+
+  // 2 — Summary change
+  if (edits.summary_replacement) {
+    const masterSummary = extractMasterSection('SUMMARY');
+    let summaryDiff = '';
+    if (masterSummary && masterSummary.trim() !== edits.summary_replacement.trim()) {
+      summaryDiff = `<div class="diff-before">${escHtml(masterSummary)}</div>
+        <div class="diff-arrow">&#x2193;</div>
+        <div class="diff-after">${escHtml(edits.summary_replacement)}</div>`;
+    } else {
+      summaryDiff = `<div class="diff-new-only">${escHtml(edits.summary_replacement)}</div>`;
+    }
+    parts.push(`<div class="hd-section"><div class="hd-section-title">Summary Rewrite</div>
+      <div class="diff-block">${summaryDiff}</div></div>`);
+  }
+
+  // 3 — Skills reorder
+  const skillsReorder = edits.skills_reorder || {};
+  const skillsEntries = Object.entries(skillsReorder).filter(([, v]) => Array.isArray(v) && v.length);
+  if (skillsEntries.length) {
+    const skillsHtml = skillsEntries.map(([cat, skills]) =>
+      `<div class="diff-block">
+        <div class="diff-company-role">${escHtml(cat)}</div>
+        <div class="diff-after" style="line-height:1.6;">${skills.map(escHtml).join(', ')}</div>
+      </div>`
+    ).join('');
+    parts.push(`<div class="hd-section"><div class="hd-section-title">Skills Reorder</div>${skillsHtml}</div>`);
+  }
+
+  // 4 — Bullet keyword swaps
+  const expEdits = Array.isArray(edits.experience_edits) ? edits.experience_edits : [];
+  if (expEdits.length) {
+    const bulletsHtml = expEdits.map(e => {
+      if (!e || typeof e !== 'object') return '';
+      const before = e.original_after_label || '';
+      const after = e.replacement_after_label || '';
+      const added = Array.isArray(e.keywords_added) ? e.keywords_added : [];
+      const kws = added.map(k => `<span class="diff-keyword-added">${escHtml(k)}</span>`).join('');
+      return `<div class="diff-block">
+        <div class="diff-company-role">${escHtml(e.company || '')} — ${escHtml(e.role || '')}</div>
+        ${before ? `<div class="diff-before">${escHtml(before)}</div><div class="diff-arrow">&#x2193;</div>` : ''}
+        <div class="diff-after">${escHtml(after)}${kws}</div>
+      </div>`;
+    }).filter(Boolean).join('');
+    if (bulletsHtml) {
+      parts.push(`<div class="hd-section"><div class="hd-section-title">Bullet Keyword Swaps (${expEdits.length})</div>${bulletsHtml}</div>`);
+    }
+  }
+
+  // 5 — Full bullet rewrites
+  const rewrites = Array.isArray(edits.rewritten_bullets) ? edits.rewritten_bullets : [];
+  if (rewrites.length) {
+    const rewritesHtml = rewrites.map(b => {
+      if (!b || typeof b !== 'object') return '';
+      const original = b.original || '';
+      const rewritten = b.rewritten || '';
+      const reason = b.reason || '';
+      return `<div class="diff-block">
+        <div class="diff-company-role">${escHtml(b.company || '')} — ${escHtml(b.role || '')}</div>
+        ${original ? `<div class="diff-before">${escHtml(original)}</div><div class="diff-arrow">&#x2193;</div>` : ''}
+        <div class="diff-after">${escHtml(rewritten)}</div>
+        ${reason ? `<div style="font-size:10px;color:var(--text-faint);margin-top:5px;font-style:italic;">${escHtml(reason)}</div>` : ''}
+      </div>`;
+    }).filter(Boolean).join('');
+    if (rewritesHtml) {
+      parts.push(`<div class="hd-section"><div class="hd-section-title">Full Bullet Rewrites (${rewrites.length})</div>${rewritesHtml}</div>`);
+    }
+  }
+
+  if (!parts.length) {
+    return '<div class="hd-section"><div class="hd-section-title">Edits</div><p style="font-size:12px;color:var(--text-faint);">No edit data available.</p></div>';
+  }
+
+  return parts.join('');
+}
+
+// ---- Ground-truth diff (spec 2026-07-15-tailor-diff-verdicts-design) ----
+
+// ctx disambiguates the two hosts that can show the same history record at
+// once (job-row panel vs 📜 History slide-out) — ids must not collide.
+// Callers pass only the literals 'row' / 'hist' (keeps the inline-JS string safe).
+function _viewChangesSection(historyId, ctx) {
+  const key = `${historyId}-${ctx}`;
+  return `<div class="hd-section" id="diff-sec-${key}">
+    <button class="btn btn-sm btn-ghost"
+      onclick="event.stopPropagation();loadTailorDiff(${historyId}, '${ctx}')">&#x1F50D; View changes</button>
+    <div id="diff-body-${key}"></div>
+  </div>`;
+}
+
+async function loadTailorDiff(historyId, ctx) {
+  const body = document.getElementById(`diff-body-${historyId}-${ctx}`);
+  if (!body) return;
+  body.innerHTML = '<p class="diff-loading">Loading diff…</p>';
+  try {
+    let payload;
+    try {
+      payload = await apiFetch(`/api/tailor/diff/${historyId}`);
+    } catch (e) {
+      await _renderDiffFallback(historyId, body, `could not load the diff: ${e.message}`);
+      return;
+    }
+    if (payload.final_text_missing) {
+      body.innerHTML = '<p class="diff-loading">Fetching from Google Doc… (first view of this resume)</p>';
+      const resp = await fetch(`/api/tailor/diff/${historyId}/sync`, { method: 'POST' });
+      if (!resp.ok) {
+        const detail = (await resp.json().catch(() => ({}))).detail || `HTTP ${resp.status}`;
+        await _renderDiffFallback(historyId, body, `could not fetch the Google Doc: ${detail}`);
+        return;
+      }
+      payload = await resp.json();
+    }
+    if (payload.diff_unavailable) {
+      await _renderDiffFallback(historyId, body, payload.diff_unavailable);
+      return;
+    }
+    body.innerHTML = renderDiffPayload(payload);
+  } catch (e) {
+    body.innerHTML = `<p style="color:var(--red);font-size:12px;">Diff failed: ${escHtml(e.message)}</p>`;
+  }
+}
+
+// Fallback: the old intent cards (renderEditsDiff), clearly labeled.
+async function _renderDiffFallback(historyId, body, reason) {
+  let cards = '';
+  try {
+    const r = await apiFetch(`/api/tailor/history/${historyId}`);
+    const edits = r.edits || {};
+    cards = renderEditsDiff(edits.edits || edits, edits.master_text || '');
+  } catch (e) { /* cards stay empty */ }
+  body.innerHTML = `<div class="diff-provenance">Ground-truth diff unavailable (${escHtml(reason)}) — showing the planned edits instead.</div>` + cards;
+}
+
+// Chip vocabulary is provenance-mapped: pipeline text supports pipeline-outcome
+// claims; live-fetched text only supports present-state claims.
+const _VERDICT_LABELS = {
+  pipeline: {
+    landed: ['landed', 'ok'], reverted: ['reverted / not applied', 'bad'],
+    not_landed: ['not landed', 'bad'], modified: ['modified', 'warn'],
+  },
+  live_fetch: {
+    landed: ['in doc', 'ok'], reverted: ['absent', 'bad'],
+    not_landed: ['absent', 'bad'], modified: ['differs', 'warn'],
+  },
+};
+
+function renderDiffPayload(p) {
+  const live = p.final_text_source === 'live_fetch';
+  const vocab = _VERDICT_LABELS[live ? 'live_fetch' : 'pipeline'];
+  const banner = live
+    ? '<div class="diff-provenance">Text captured from the Google Doc on first view — may include manual edits made after tailoring.</div>'
+    : '';
+  const chips = (p.verdicts || []).map(v => {
+    const [label, cls] = vocab[v.verdict] || [v.verdict, 'warn'];
+    const detail = `${v.before ? `<div class="diff-before">${escHtml(v.before)}</div><div class="diff-arrow">&#x2193;</div>` : ''}
+      <div class="diff-after">${escHtml(v.after || '')}</div>`;
+    return `<span class="diff-chip ${cls}" onclick="event.stopPropagation();toggleVerdictDetail(this)">&#x25CF; ${escHtml(v.label)}: ${escHtml(label)}</span>
+      <div class="verdict-detail" style="display:none;">${detail}</div>`;
+  }).join('');
+  const blocks = (p.blocks || []).map(b => {
+    if (b.type === 'context') return `<div class="diff-ctx">${escHtml(b.text)}</div>`;
+    if (b.ops) {
+      return `<div class="diff-line">${b.ops.map(([op, t]) =>
+        `<span class="${op === 'eq' ? '' : op === 'del' ? 'diff-del' : 'diff-ins'}">${escHtml(t)}</span>`
+      ).join(' ')}</div>`;
+    }
+    return `<div class="diff-line">${b.before ? `<span class="diff-del">${escHtml(b.before)}</span> ` : ''}${b.after ? `<span class="diff-ins">${escHtml(b.after)}</span>` : ''}</div>`;
+  }).join('');
+  const w = p.warnings || {};
+  const warnList = [...(w.layout || []), ...(w.must_have || [])];
+  const warnings = warnList.length
+    ? `<div class="hd-section"><div class="hd-section-title">Warnings</div>${warnList.map(x =>
+        `<div class="ats-issue-row"><span class="ats-issue-icon warn">&#x2022;</span><span>${escHtml(x)}</span></div>`).join('')}</div>`
+    : '';
+  return `${banner}
+    <div class="hd-section"><div class="hd-section-title">Edit verdicts</div>${chips || '<span style="font-size:11px;color:var(--text-faint);">No verdicts stored.</span>'}</div>
+    <div class="hd-section"><div class="hd-section-title">Changes vs master</div>${blocks || '<span style="font-size:12px;color:var(--text-faint);">No differences found.</span>'}</div>
+    ${warnings}`;
+}
+
+function toggleVerdictDetail(el) {
+  const d = el.nextElementSibling;
+  if (d) d.style.display = d.style.display === 'none' ? 'block' : 'none';
+}
+
+function fmtHistoryDate(isoStr) {
+  if (!isoStr) return '—';
+  try {
+    const d = new Date(isoStr);
+    const now = new Date();
+    const diffMs = now - d;
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffDays === 0) return 'Today ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: diffDays > 365 ? 'numeric' : undefined });
+  } catch { return isoStr.slice(0, 10); }
+}
+
+// ============================================================
+// Auto-refresh every 5 minutes
+// ============================================================
+function startAutoRefresh() {
+  if (state.autoRefreshTimer) clearInterval(state.autoRefreshTimer);
+  state.autoRefreshTimer = setInterval(() => {
+    loadData();
+  }, 5 * 60 * 1000);
+}
+
+// ============================================================
+// Init
+// ============================================================
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadUiConfig();
+  updateProfileUI();
+  loadProfiles();
+  loadAutoTailorSetting();
+  loadData();
+  startAutoRefresh();
+  updateSortArrows();
+});
+</script>
+</body>
+</html>

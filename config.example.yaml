@@ -1,0 +1,264 @@
+# Job Sentinel configuration.
+# Every key here is LIVE (read by code). Owner-policy VALUES that live in code
+# have generic defaults in profile_policy.py — see CUSTOMIZING.md. Copy this
+# file to config.yaml.
+
+profile:
+  # Identifies which profile_policy.py values apply (dashboard multi-profile
+  # support). "default" is fine for a single-owner setup.
+  key: default
+  # Job titles you're targeting. Used by scrapers to broaden title matching.
+  target_titles:
+    - "Senior Widget Engineer"
+    - "Director of Widgets"
+
+# Search queries for LinkedIn keyword search (each walked linkedin_max_pages pages).
+# These base queries carry LinkedIn's f_WT=2 remote-jobs filter (see
+# scrapers/linkedin.py BASE_SEARCH_URL) — they will NOT surface in-office/
+# hybrid local roles. Local coverage comes from local_search_queries below
+# (LOCAL_SEARCH_URL: location + distance=25, no f_WT=2) combined with
+# policy.geography.linkedin_local_geo.
+search_queries:
+  - "Senior Widget Engineer remote"
+  - "Director of Widgets remote"
+
+scoring:
+  # Blended score at/above this counts as a match (alerts, dashboard tier).
+  alert_threshold: 60
+  # Keyword-score penalty when company intel flags recent layoffs (0 disables).
+  layoff_penalty: 5
+
+scraping:
+  max_results_per_source: 50
+  rate_limit_seconds: 2
+
+# Commuter-area cities near you (with your state — see profile_policy.py
+# LOCAL_STATE_PATTERN). Empty list = remote-only, all local behavior off.
+local_locations: []
+
+# Welcome to the Jungle (Algolia). Role-only queries work best.
+wttj_enabled: true
+wttj_queries:
+  - "Widget Engineer"
+
+# Hacker News "Ask HN: Who is hiring?" (free Algolia API).
+# Role gate + remote-only switch live in profile_policy.py (HN_ROLE_RE).
+hn_whoishiring_enabled: true
+
+dashboard:
+  port: 8500
+  # Localhost-only: the dashboard is unauthenticated. Front it with Tailscale
+  # serve (or similar) for remote access; never bind 0.0.0.0 on an open LAN.
+  host: "127.0.0.1"
+  page_title: "Job Sentinel — Opportunities"
+  # Three ascending comp filter-chip dollar breakpoints (also the analytics histogram bucket edges).
+  comp_tiers: [150000, 200000, 250000]
+  # Per-profile display metadata, keyed by profile.key above. Empty is fine
+  # for a single-owner setup — the dashboard falls back to generic labels.
+  profiles: {}
+  #  default:
+  #    label: "My Search"
+  #    subtitle: "Jane Doe — Senior Widget Engineer Opportunities"
+
+# --- ATS tenants: find your target companies' career systems -----------------
+# Workday: careers page URL like https://{slug}.wd5.myworkdayjobs.com/{site}
+# verify: POST https://{tenant_url}/wday/cxs/{slug}/{site_path}/jobs returns JSON
+workday_tenants: []
+#  - company: Example Corp
+#    tenant_url: example.wd5.myworkdayjobs.com
+#    company_slug: example
+#    site_path: ExampleCareers
+
+# Eightfold: career sites on {subdomain}.eightfold.ai (or a custom base_url).
+# verify: curl -s "https://{subdomain}.eightfold.ai/api/apply/v2/jobs?domain={domain}&query=&start=0&num=10" | grep -c '"id"'  → >0
+eightfold_tenants: []
+
+# SmartRecruiters: https://api.smartrecruiters.com/v1/companies/{company_id}/postings
+# verify: curl -s "https://api.smartrecruiters.com/v1/companies/{company_id}/postings?limit=1" | grep -o '"totalFound":[0-9]*'
+#   CAVEAT: HTTP 200 with totalFound:0 can mean either a genuinely empty
+#   board OR a wrong company_id slug — SmartRecruiters returns 200 either
+#   way. Cross-check the company's public careers page (often
+#   jobs.smartrecruiters.com/{company_id}) before concluding the board is
+#   really empty.
+smartrecruiters_companies: []
+
+# SAP SuccessFactors Career Site Builder:
+# verify: curl -s "{base_url}/search/?q=&sortColumn=referencedate&sortDirection=desc&startrow=0" | grep -c data-row  → >0
+successfactors_tenants: []
+
+# Broadened LOCAL titles (only used when local_locations is non-empty).
+local_target_titles: []
+
+# Greenhouse boards: https://api.greenhouse.io/v1/boards/{slug}/jobs
+greenhouse_slugs: {}
+#  Example Corp: examplecorp
+
+# Lever boards: https://api.lever.co/v0/postings/{slug}?mode=json
+lever_slugs: {}
+
+# Ashby boards: https://api.ashbyhq.com/posting-api/job-board/{slug}
+ashby_slugs: {}
+
+# LinkedIn pagination: pages (~25 cards each) per query.
+# FIRST RUN: keep this at 1 — an empty DB detail-fetches every card.
+# After the first successful run, raise to 3.
+linkedin_max_pages: 1
+
+# Queries that get LinkedIn's seniority facet appended (trims entry-level noise).
+linkedin_seniority_facet_queries: []
+
+# Company-targeted LinkedIn searches run ONLY these queries.
+linkedin_company_search_queries: []
+
+# Company-targeted searches: LinkedIn f_C company IDs.
+linkedin_company_searches: {}
+
+# Local-geo LinkedIn searches (needs local_locations + profile_policy geo).
+local_search_queries: []
+linkedin_local_company_searches: {}
+
+llm_scoring:
+  model: claude-sonnet-5
+  # Concurrent claude CLI processes (~260 MB each). 2 on 8 GB machines, 4 on 16 GB.
+  workers: 2
+  # Stream LLM scoring behind the scrape (main.py run_overlap_scrape_and_score);
+  # false = classic sequential pass (scrape everything, then score everything).
+  overlap_scrape: true
+  # LLM-call budget held back from streaming for the post-scrape catch-up pass;
+  # only meaningful with max_jobs_per_run set below.
+  streaming_reserve: 50
+  # LLM calls per run — protects your Claude subscription usage window.
+  max_jobs_per_run: 100
+  # Jobs below this blended score never get a Filter Match judge call.
+  judge_min_score: 40
+  keyword_weight: 0.4
+  llm_weight: 0.6
+  # REQUIRED before LLM scoring runs: a 10-20 line summary of YOUR background,
+  # skills, target roles, salary floor, and location policy. Scoring fails
+  # loudly (by design) until you write this. See SETUP.md.
+  # resume_summary: >-
+  #   <your professional summary>
+
+# Auto-tailor top matches after each run (needs Google OAuth + an Opus-capable
+# Claude plan — see SETUP.md). Leave off until tailoring works manually.
+auto_tailor:
+  enabled: false
+  min_score: 85
+  # Filter Match floor a job must clear before auto-tailoring (>=, inclusive).
+  min_filter_score: 60
+  max_per_run: 2
+  # Concurrent auto-tailor pipelines; clamped by CLAUDE_CLI_MAX_CONCURRENCY.
+  workers: 1
+
+retention:
+  expired_days: 180
+
+# --- Owner policy (read by profile_policy.py) --------------------------------
+# Every value below is a per-owner POLICY value: keywords, comp bars,
+# geography, title gates, rubric prose, prefilter regex patterns, tailor
+# anchors. Absent keys (or an absent config.yaml entirely) fall back to
+# generic, functional defaults in profile_policy.py's _DEFAULTS table — empty
+# ATS title gates make those scrapers pass ONLY profile.target_titles matches
+# (both empty = those sources dormant), empty prefilter patterns defer entirely
+# to the LLM judge, and empty keyword lists contribute no keyword score. Regex
+# keys are single pattern strings (not lists). Full schema reference:
+# CUSTOMIZING.md. Absent keys fall back to generic defaults in code.
+policy:
+  # Owner pins (OPTIONAL — fork maintainers only; see CUSTOMIZING.md).
+  # Leave BOTH unset for a personalized clone: rubric_sha empty skips the
+  # byte-identity guard test, summary_mentions_relocation false skips the
+  # resume-summary lint. Set them only once your rubric bytes are tuned and you
+  # want CI to freeze them / enforce your summary names your relocation bar.
+  # owner_pins:
+  #   rubric_sha: ""                      # sha256 of your assembled fit template
+  #   summary_mentions_relocation: false  # true = require the $reloc bar in resume_summary
+  geography:
+    # State/region context that must directly follow a local_locations city
+    # for it to count as "local" (see local_area.py). Empty disables local
+    # matching even if local_locations is populated.
+    local_state_pattern: ""
+    #  local_state_pattern: "south\\s+carolina|sc\\b"
+    # LinkedIn geo search string for the local search layer.
+    linkedin_local_geo: ""
+    #  linkedin_local_geo: "Springfield, Illinois, United States"
+    # Prose fragments spliced into the LLM scoring rubric's remote_location
+    # dimension (engine/llm_scorer.py). Leave these keys ABSENT (as below) to
+    # engage profile_policy.py's generic neutral defaults ("the candidate's
+    # local commuter area…"). Do NOT set them to "" — an empty string splices a
+    # blank into the rubric prose instead of falling back to the default.
+    #  rubric_local_area_prose: "Springfield, IL (Springfield, Riverton, Chatham — candidate lives there)"
+    #  rubric_local_area_short: "Springfield/Riverton IL area"
+    #  rubric_local_anchor: "Springfield-local senior role"
+  comp:
+    # Comp bars in USD/year. Defaults below are reasonable generic tech-market
+    # bars; the setup interview overwrites them with your numbers.
+    target: 220000            # remote/national comp bar
+    local_full: 150000        # local-market full-points bar
+    local_partial: 120000     # local partial-credit bar
+    remote_partial: 180000    # remote partial-credit bar
+    cap_low: 170000           # LLM comp_match hard-cap bands
+    cap_mid: 200000
+    relocation_exception: 300000  # posted top-of-band exempting US onsite roles
+  keywords:
+    # Keyword-score inputs (engine/scorer.py). Empty = keyword score is 0 for
+    # every job (fine if you rely on the LLM judge alone).
+    primary: []
+    #  primary: ["ai", "ml", "llm"]
+    secondary: []
+    #  secondary: ["automation", "enterprise", "agile"]
+  companies:
+    high_paying: []
+    #  high_paying: ["google", "anthropic", "openai"]
+    priority: []
+    #  priority: ["anthropic", "openai"]
+  title_gates:
+    # Scraper title gates — ALL SEVEN ATS scrapers gate on baseline OR
+    # target_titles: greenhouse, lever, ashby, workday, eightfold,
+    # smartrecruiters, successfactors. (WTTJ and HN "Who is hiring?" use
+    # their own separate policy.wttj.* / policy.hn.* config below, not this
+    # key.) Empty = only profile.target_titles token-matches pass; if
+    # target_titles is also empty, these sources yield nothing until
+    # configured.
+    baseline: []
+    #  baseline: ["product manager", "director of product"]
+    domain: []
+    #  domain: ["ai", "ml", "llm"]
+  wttj:
+    title_keywords: []
+    default_queries: []
+  hn:
+    # Hacker News "Who is hiring?" role gate. Empty pattern = no HN posts match.
+    role_pattern: ""
+    #  role_pattern: "(product manager|director of product)"
+    remote_only: true
+  prefilter:
+    # Rules-based prefilter regexes (engine/llm_scorer.py), each a single
+    # pattern string. Empty = the rule is disabled and every job defers to
+    # the LLM judge for that signal.
+    non_target_titles: ""
+    sales_bd_titles: ""
+    solutions_cs_titles: ""
+    eng_title_keywords: ""
+    non_target_adjacent_titles: ""
+    target_keywords: ""
+    domain_signal_pattern: ""
+  tailor:
+    # Anchors used by resume_tailor/ when rewriting your master resume.
+    master_title_line: ""
+    #  master_title_line: "SENIOR WIDGET ENGINEER | PLATFORM & AUTOMATION"
+    skill_subcategory_labels: {}
+    extra_ats_headers: []
+  rubric:
+    # LLM scoring rubric dimension prose (engine/llm_scorer.py splices these
+    # into the system prompt). These keys MUST stay ABSENT (commented out) to
+    # use the neutral generic rubric baked into profile_policy.py's _DEFAULTS.
+    # An empty string is NOT the same as absence here: "" is a real value that
+    # _resolve returns as-is, so it would splice a BLANK block into the prompt
+    # (dropping the generic rubric and the $300K relocation band, and poisoning
+    # the byte-identity sha prefix) instead of falling back to the default.
+    # Override per-dimension by UN-commenting a key once you've tailored the
+    # wording to your target role.
+    #  role_match_block: "1. role_match (0-30): …"
+    #  seniority_match_block: "2. seniority_match (0-20): …"
+    #  remote_location_block: "3. remote_location (0-20): …"
+    #  domain_fit_block: "4. ai_domain_fit (0-20): …"

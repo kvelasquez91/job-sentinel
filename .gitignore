@@ -1,0 +1,32 @@
+# Secrets / credentials
+.env
+resume_tailor/config/
+.claude/settings.local.json
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# Data / databases / logs (generated)
+*.db
+*.db-shm
+*.db-wal
+*.bak-*
+data/jobs.db
+data/.scoring.lock
+data/reports/
+data/tailored_resumes/
+data/master_resume.txt
+data/experience_inventory.md
+data/skills_plan.md
+data/verdict_repair_backup-*.json
+logs/
+dist/
+
+# OS
+.DS_Store
+
+# Your personal config — never committed (see SETUP.md / CUSTOMIZING.md)
+config.yaml
