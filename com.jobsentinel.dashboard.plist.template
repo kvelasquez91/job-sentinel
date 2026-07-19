@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.jobsentinel.dashboard</string>
+    <string>com.jobsentinel.__PROFILE_KEY__.dashboard</string>
 
     <key>ProgramArguments</key>
     <array>
@@ -16,10 +16,10 @@
     <string>__REPO_DIR__</string>
 
     <key>StandardOutPath</key>
-    <string>__HOME__/Library/Logs/job-sentinel/dashboard_stdout.log</string>
+    <string>__HOME__/Library/Logs/job-sentinel/__PROFILE_KEY__/dashboard_stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>__HOME__/Library/Logs/job-sentinel/dashboard_stderr.log</string>
+    <string>__HOME__/Library/Logs/job-sentinel/__PROFILE_KEY__/dashboard_stderr.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>

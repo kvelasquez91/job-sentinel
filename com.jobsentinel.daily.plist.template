@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.jobsentinel.daily</string>
+    <string>com.jobsentinel.__PROFILE_KEY__.daily</string>
 
     <key>ProgramArguments</key>
     <array>
@@ -31,10 +31,10 @@
     </array>
 
     <key>StandardOutPath</key>
-    <string>__HOME__/Library/Logs/job-sentinel/launchd_stdout.log</string>
+    <string>__HOME__/Library/Logs/job-sentinel/__PROFILE_KEY__/launchd_stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>__HOME__/Library/Logs/job-sentinel/launchd_stderr.log</string>
+    <string>__HOME__/Library/Logs/job-sentinel/__PROFILE_KEY__/launchd_stderr.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>

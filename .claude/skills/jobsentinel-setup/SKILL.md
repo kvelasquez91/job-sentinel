@@ -86,7 +86,10 @@ the database). Optional resume tailoring: SETUP.md §9 (Google OAuth), then
 
 ## 6. Schedule
 Ask: how often to run? macOS: instantiate both plist templates with SETUP.md
-§8's sed one-liner; for non-default times, edit the Hour/Minute dicts in
+§8's snippet (agent labels and log paths get suffixed with profile.key, so a
+second checkout/profile never overwrites an existing install's agents; the
+snippet's guard also refuses plists that belong to a different checkout); for
+non-default times, edit the Hour/Minute dicts in
 `com.jobsentinel.daily.plist.template` first (the dashboard template has no
 schedule — it runs continuously via RunAtLoad+KeepAlive). Offer to run it.
 Linux: emit the cron line from SETUP.md §8 with their times.
