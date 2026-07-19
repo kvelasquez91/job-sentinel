@@ -15,20 +15,7 @@
     <string>__REPO_DIR__</string>
 
     <key>StartCalendarInterval</key>
-    <array>
-        <dict>
-            <key>Hour</key>
-            <integer>2</integer>
-            <key>Minute</key>
-            <integer>30</integer>
-        </dict>
-        <dict>
-            <key>Hour</key>
-            <integer>13</integer>
-            <key>Minute</key>
-            <integer>0</integer>
-        </dict>
-    </array>
+    __START_CALENDAR_INTERVAL__
 
     <key>StandardOutPath</key>
     <string>__HOME__/Library/Logs/job-sentinel/__PROFILE_KEY__/launchd_stdout.log</string>

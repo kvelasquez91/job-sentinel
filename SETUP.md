@@ -101,8 +101,10 @@ by hand.
 python main.py --dashboard
 ```
 
-Then open http://127.0.0.1:8500. The dashboard is unauthenticated by design and
-binds to localhost only, per `config.yaml`.
+Then open http://127.0.0.1:8500 — or whatever `dashboard.port` you set in
+`config.yaml`; if 8500 is already taken on your machine (another app, or a
+second Job Sentinel install), just pick a free port there. The dashboard is
+unauthenticated by design and binds to localhost only, per `config.yaml`.
 
 Run all commands from the repo root — config paths are resolved relative to it.
 
@@ -112,37 +114,27 @@ Two launchd agents ship as templates: one for the twice-daily scrape/score run,
 one to keep the dashboard always running. Agent labels and log paths are
 suffixed with your `profile.key` (from `config.yaml`), so a second checkout or
 profile on the same machine gets its own agents instead of silently re-pointing
-an existing install's — the guard in the loop below refuses to overwrite an
-agent that belongs to a different checkout. (`profile.key` must be a plain
-slug — letters, digits, dots, dashes, underscores; the setup interview writes
-one.) Instantiate and load both with:
+an existing install's — the render script refuses to overwrite an agent that
+belongs to a different checkout. (`profile.key` must be a plain slug — letters,
+digits, dots, dashes, underscores; the setup interview writes one.) Run times
+come from `schedule.daily_times` in `config.yaml` (24h "HH:MM" strings;
+absent = `["02:30", "13:00"]`), so custom times never require editing a
+tracked file. Instantiate and load both with:
 
 ```bash
-REPO_DIR="$(pwd)"; CLAUDE_DIR="$(dirname "$(which claude)")"
-PROFILE_KEY="$(./venv/bin/python -c "import yaml; print((yaml.safe_load(open('config.yaml')) or {}).get('profile', {}).get('key', 'default'))")"
-mkdir -p ~/Library/Logs/job-sentinel/"$PROFILE_KEY"
-for t in daily dashboard; do
-  label="com.jobsentinel.$PROFILE_KEY.$t"
-  dest="$HOME/Library/LaunchAgents/$label.plist"
-  if [ -e "$dest" ] && ! grep -qF "$REPO_DIR" "$dest"; then
-    echo "skipping $label — $dest belongs to a different checkout"; continue
-  fi
-  sed -e "s|__REPO_DIR__|$REPO_DIR|g" -e "s|__HOME__|$HOME|g" \
-      -e "s|__CLAUDE_DIR__|$CLAUDE_DIR|g" -e "s|__PROFILE_KEY__|$PROFILE_KEY|g" \
-      "com.jobsentinel.$t.plist.template" > "$dest"
+./venv/bin/python scripts/render_launchd.py | while read -r label; do
   launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
-  launchctl bootstrap "gui/$(id -u)" "$dest"
+  launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/"$label.plist"
 done
 ```
 
-Run this from the repo root (`REPO_DIR="$(pwd)"` needs it, and the venv python
-reads `config.yaml` there). The dashboard agent uses `RunAtLoad` + `KeepAlive`,
-so once loaded you never need to start `--dashboard` manually again — it just
-stays up. Non-default run times: edit the Hour/Minute integers in
-`com.jobsentinel.daily.plist.template`'s `StartCalendarInterval` before running
-the sed above (the dashboard template has no schedule to edit — it's the
-always-on one). Upgrading from agents installed before labels were
-per-profile? See the one-time migration note in UPDATING.md.
+Run this from the repo root (the script reads `config.yaml` there; it renders
+the plists and prints their labels, and skipped/foreign agents are reported on
+stderr and never bootstrapped). The dashboard agent uses `RunAtLoad` +
+`KeepAlive`, so once loaded you never need to start `--dashboard` manually
+again — it just stays up. To change run times later, edit
+`schedule.daily_times` and re-run the snippet. Upgrading from agents installed
+before labels were per-profile? See the one-time migration note in UPDATING.md.
 
 **Linux alternative** (no launchd — use cron):
 

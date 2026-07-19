@@ -32,6 +32,11 @@ scraping:
   max_results_per_source: 50
   rate_limit_seconds: 2
 
+# Daily-run times for the launchd/cron automation (SETUP.md §8): 24h "HH:MM"
+# local times, one scrape/score run each. Absent = ["02:30", "13:00"].
+# schedule:
+#   daily_times: ["07:30", "17:30"]
+
 # Commuter-area cities near you (with your state — see profile_policy.py
 # LOCAL_STATE_PATTERN). Empty list = remote-only, all local behavior off.
 local_locations: []
@@ -46,6 +51,7 @@ wttj_queries:
 hn_whoishiring_enabled: true
 
 dashboard:
+  # 8500 already in use (another app, or a second install)? Any free port works.
   port: 8500
   # Localhost-only: the dashboard is unauthenticated. Front it with Tailscale
   # serve (or similar) for remote access; never bind 0.0.0.0 on an open LAN.
