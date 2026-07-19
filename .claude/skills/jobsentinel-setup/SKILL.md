@@ -65,7 +65,11 @@ each one. Write: `workday_tenants`, `eightfold_tenants`,
 `smartrecruiters_companies`, `successfactors_tenants`, `greenhouse_slugs`,
 `lever_slugs`, `ashby_slugs`, `policy.companies.high_paying` / `.priority`,
 `policy.wttj.*`, `policy.hn.role_pattern` (+ `remote_only`), LinkedIn
-`search_queries`. LinkedIn note (transparency): it scrapes public guest
+`search_queries`. Workday/Eightfold search each tenant with the owner's
+titles (target_titles + local_target_titles; override with
+`ats_search_queries`), NOT the LinkedIn-phrased `search_queries` — never
+append "remote" to titles. Tag commuter-area Workday tenants `local: true`
+so they also get the empty-search local pass. LinkedIn note (transparency): it scrapes public guest
 endpoints; LinkedIn's ToS prohibits scraping — rate limits are conservative
 and no login is used, but the owner should know that is the mechanism.
 Keep `linkedin_max_pages: 1` until after the first run.

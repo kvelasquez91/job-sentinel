@@ -39,7 +39,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from .base import BaseScraper, JobPosting, clean_description
+from .base import BaseScraper, JobPosting, ats_search_queries, clean_description
 from .greenhouse import _title_passes_filter, _tokenize_title
 from salary_rules import extract_salary_regex
 
@@ -362,7 +362,12 @@ class EightfoldScraper(BaseScraper):
         """
         Scrape all tenants for all queries. Deduplicates by URL across
         tenants and queries. Rate-limits between each (tenant × query) call.
+
+        Eightfold's search is server-side (the `query` API param), so the
+        LinkedIn-phrased queries the orchestrator passes are swapped for
+        ats_search_queries() — see scrapers/base.py.
         """
+        queries = ats_search_queries(self.config, fallback=queries) or queries
         all_jobs: List[JobPosting] = []
         seen_urls: set = set()
 
