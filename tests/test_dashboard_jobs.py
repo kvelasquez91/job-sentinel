@@ -66,21 +66,13 @@ def test_list_omits_filter_json_but_keeps_filter_scalars(tmp_path, monkeypatch):
     assert detail["filter_json"] == '{"must_haves": []}'
 
 
-def _pin_gate_policy(monkeypatch):
-    """Config-agnostic inputs for the filter-gate tests: the PM-shaped
-    prefilter (empty in a neutral tree, arbitrary in a personalized one — e.g.
-    a non_target_titles capping "product manager" flips 'onsite' verdicts to
-    'off-target') AND no ambient local area (a personalized local_locations
-    containing 'New York' flips the seeded onsite rows to ungated)."""
-    import engine.llm_scorer as llm_scorer
-    patch_pm_prefilter(monkeypatch)
-    monkeypatch.setattr(llm_scorer, "_LOCAL_AREA_RE", None)
-
-
 def test_filter_gate_marks_prefilter_skipped_rows(tmp_path, monkeypatch):
     """Rows the prefilter would hard-skip (never scored) get a filter_gate
     reason so the UI can tell 'onsite/off-target' apart from 'not scored yet'."""
-    _pin_gate_policy(monkeypatch)
+    # The off-target gate ('Senior Software Engineer') and the soft-cap case
+    # ('Business Analyst', cap 30) rely on the PM-shaped prefilter patterns,
+    # which are empty in a neutral tree.
+    patch_pm_prefilter(monkeypatch)
     db = tmp_path / "jobs.db"
     conn = main_mod.init_database(str(db))
     desc = "We build enterprise AI products for large teams. " * 30  # no remote signal
@@ -148,7 +140,6 @@ def _count_salary_parses(monkeypatch):
 
 
 def test_filter_gate_cached_across_polls(tmp_path, monkeypatch):
-    _pin_gate_policy(monkeypatch)
     monkeypatch.setattr(app_mod, "DB_PATH", str(_seed_gated(tmp_path)))
     app_mod._FILTER_GATE_CACHE.clear()
     calls = _count_salary_parses(monkeypatch)
@@ -164,7 +155,6 @@ def test_filter_gate_cached_across_polls(tmp_path, monkeypatch):
 
 
 def test_filter_gate_cache_invalidates_on_content_change(tmp_path, monkeypatch):
-    _pin_gate_policy(monkeypatch)
     db = _seed_gated(tmp_path)
     monkeypatch.setattr(app_mod, "DB_PATH", str(db))
     app_mod._FILTER_GATE_CACHE.clear()
@@ -184,7 +174,6 @@ def test_filter_gate_cache_invalidates_on_content_change(tmp_path, monkeypatch):
 def test_filter_gate_scoring_bypasses_cache(tmp_path, monkeypatch):
     """Once a row gets a filter_score, the gate is None even with a stale
     cached verdict for that id."""
-    _pin_gate_policy(monkeypatch)
     db = _seed_gated(tmp_path)
     monkeypatch.setattr(app_mod, "DB_PATH", str(db))
     app_mod._FILTER_GATE_CACHE.clear()

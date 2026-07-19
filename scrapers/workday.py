@@ -23,8 +23,7 @@ from typing import List, Optional
 import requests
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from .base import (DESCRIPTION_MAX_LEN, BaseScraper, JobPosting,
-                   ats_search_queries, clean_description)
+from .base import DESCRIPTION_MAX_LEN, BaseScraper, JobPosting, clean_description
 from .greenhouse import _title_passes_filter, _tokenize_title, is_local_commuter_area
 
 
@@ -891,13 +890,7 @@ class WorkdayScraper(BaseScraper):
         """
         Scrape all tenants for all queries. Deduplicates by URL across
         tenants and queries. Paces requests per cluster host (see _pace_cluster).
-
-        Workday's search is server-side, so the LinkedIn-phrased queries the
-        orchestrator passes (" remote"-suffixed) are swapped for
-        ats_search_queries() — title-shaped terms a tenant's search box can
-        actually match. The passed list is only used as a last-resort source.
         """
-        queries = ats_search_queries(self.config, fallback=queries) or queries
         all_jobs: List[JobPosting] = []
         seen_urls: set = set()
 

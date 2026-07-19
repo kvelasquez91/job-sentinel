@@ -11,49 +11,6 @@ from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
-# --- ATS search-query source --------------------------------------------------
-# Workday and Eightfold search server-side (searchText / query API params).
-# The LinkedIn-phrased `search_queries` ("Senior Widget Engineer remote")
-# almost never match a tenant's own search box — the " remote" suffix alone
-# returns ~0 — so a local-first owner's verified tenants silently yield
-# nothing. These scrapers search with ats_search_queries() instead; title
-# gates still filter results afterwards, exactly as before.
-_REMOTE_WORD_RE = re.compile(r"\bremote\b", re.IGNORECASE)
-
-
-def _dedupe_clean(values) -> List[str]:
-    out: List[str] = []
-    seen = set()
-    for v in values:
-        v = " ".join(str(v).split())
-        if v and v.lower() not in seen:
-            seen.add(v.lower())
-            out.append(v)
-    return out
-
-
-def ats_search_queries(config: dict, fallback: Optional[List[str]] = None) -> List[str]:
-    """Query set for server-side-search ATS scrapers (Workday, Eightfold).
-
-    Order: explicit `ats_search_queries` config key > profile.target_titles +
-    local_target_titles (deduped, order kept) > `search_queries` (or the
-    caller's `fallback` list) with the word "remote" stripped. Returns [] only
-    when every source is empty.
-    """
-    explicit = _dedupe_clean(config.get("ats_search_queries") or [])
-    if explicit:
-        return explicit
-
-    titles = list((config.get("profile") or {}).get("target_titles") or [])
-    titles += list(config.get("local_target_titles") or [])
-    titles = _dedupe_clean(titles)
-    if titles:
-        return titles
-
-    source = config.get("search_queries") or fallback or []
-    return _dedupe_clean(_REMOTE_WORD_RE.sub(" ", str(q)) for q in source)
-
-
 # --- Description HTML sanitization -------------------------------------------
 # Job descriptions arrive from many APIs in inconsistent shapes: some are plain
 # text, some are raw HTML (<div>/<p>/<li>), and some are ENTITY-ENCODED HTML
