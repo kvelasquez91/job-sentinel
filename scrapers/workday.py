@@ -205,8 +205,13 @@ class WorkdayScraper(BaseScraper):
     def _job_page_url(self, tenant: dict, external_path: str) -> str:
         """Build the human-readable job URL."""
         tenant_url = tenant["tenant_url"]
-        # external_path typically looks like /job/Some-City/Job-Title_JR-12345
-        return f"https://{tenant_url}/en-US{external_path}"
+        site_path = tenant["site_path"]
+        # external_path typically looks like /job/Some-City/Job-Title_JR-12345.
+        # The career-site segment is REQUIRED: /en-US{external_path} (the
+        # pre-2026-07-20 shape) gets Workday's "page not found" — often a
+        # literal HTTP 404 — for jobs that are live. This is the canonical
+        # form Workday itself advertises in jobPostingInfo.externalUrl.
+        return f"https://{tenant_url}/{site_path}{external_path}"
 
     def _establish_session_for_tenant(self, tenant: dict) -> tuple:
         """

@@ -446,6 +446,9 @@ def _migrate_columns(conn: sqlite3.Connection) -> None:
         conn.commit()
         logger.info("Migration: added column jobs.auto_tailor_attempts")
     if "auto_tailor_exempt" not in jobs_cols:
+        # Value semantics: 1 = grandfathered (this backfill), 2 = confirmed
+        # dead posting, 3 = suspected dead pending recheck (2 and 3 set at
+        # runtime; see AUTO_TAILOR_EXEMPT_* constants).
         conn.execute("ALTER TABLE jobs ADD COLUMN auto_tailor_exempt INTEGER")
         # Grandfather snapshot: everything already qualifying at ship time
         # stays manual (the owner has seen those rows in the dashboard for weeks).
@@ -464,6 +467,58 @@ def _migrate_columns(conn: sqlite3.Connection) -> None:
             "Migration: added jobs.auto_tailor_exempt; grandfathered %d rows "
             "(pre-feature qualifiers stay manual)", cur.rowcount,
         )
+
+
+def repair_legacy_job_urls(conn: sqlite3.Connection, workday_tenants) -> None:
+    """Rewrite job URLs stored by pre-2026-07-20 scrapers to the formats the
+    fixed scrapers now emit. Ingest dedups by URL, so WITHOUT this repair
+    every existing workday/smartrecruiters row re-ingests as a duplicate on
+    the first post-upgrade run:
+      - smartrecruiters rows stored the API self-link
+        (api.smartrecruiters.com/v1/companies/X/postings/Y) instead of the
+        public page (jobs.smartrecruiters.com/X/Y);
+      - workday rows lacked the career-site segment (/en-US/job/... instead
+        of /{site_path}/job/...) — Workday shows "page not found" for that
+        shape. Site tokens come from the configured tenant map; rows from
+        tenants no longer in config are left as-is (no token to insert).
+    Idempotent: rewritten rows no longer match the legacy patterns. url is
+    UNIQUE — if the fixed-format URL already exists as its own row, the
+    legacy row is left untouched (a migration must never delete or clobber
+    rows that may carry user state)."""
+    sr_prefix = "https://api.smartrecruiters.com/v1/companies/"
+    rewrites = []  # (id, new_url)
+    for row in conn.execute(
+            "SELECT id, url FROM jobs WHERE url LIKE ? || '%'", (sr_prefix,)):
+        rest = row["url"][len(sr_prefix):]
+        if "/postings/" in rest:
+            rewrites.append((row["id"], "https://jobs.smartrecruiters.com/"
+                             + rest.replace("/postings/", "/", 1)))
+    for tenant in workday_tenants or []:
+        host = tenant.get("tenant_url", "")
+        site = tenant.get("site_path", "")
+        if not host or not site:
+            continue
+        old_prefix = f"https://{host}/en-US/job/"
+        new_prefix = f"https://{host}/{site}/job/"
+        for row in conn.execute(
+                "SELECT id, url FROM jobs WHERE url LIKE ? || '%'", (old_prefix,)):
+            rewrites.append((row["id"], new_prefix + row["url"][len(old_prefix):]))
+
+    repaired = skipped = 0
+    for job_id, new_url in rewrites:
+        clash = conn.execute(
+            "SELECT 1 FROM jobs WHERE url = ?", (new_url,)).fetchone()
+        if clash:
+            skipped += 1
+            continue
+        conn.execute("UPDATE jobs SET url = ? WHERE id = ?", (new_url, job_id))
+        repaired += 1
+    if rewrites:
+        conn.commit()
+        logger.info(
+            "Migration: repaired %d legacy job URL(s) to the fixed scraper "
+            "format (%d left in place: fixed-format row already exists).",
+            repaired, skipped)
 
 
 # ---------------------------------------------------------------------------
@@ -1138,14 +1193,28 @@ def format_sources(counts: dict) -> str:
     return ",".join(name.lower() for name, count in counts.items() if count > 0)
 
 
+# jobs.auto_tailor_exempt values — any nonzero value excludes the row from
+# auto-tailor selection; distinct values keep "why is this row exempt"
+# answerable in sqlite. Manual dashboard tailoring ignores the column.
+# SUSPECTED is provisional: one 404/410 observation is NOT proof of death
+# (2026-07-20: the 02:30 Workday overnight window served 404s for LIVE
+# postings across three tenants at once) — the next run's pre-selection
+# recheck either clears it (2xx: alive) or promotes it to DEAD_POSTING
+# (404/410 again, ~10h later under the 02:30/13:00 schedule).
+AUTO_TAILOR_EXEMPT_GRANDFATHERED = 1    # pre-feature snapshot (2026-07-15 migration)
+AUTO_TAILOR_EXEMPT_DEAD_POSTING = 2     # dead confirmed: 404/410 twice, runs apart
+AUTO_TAILOR_EXEMPT_DEAD_SUSPECTED = 3   # one 404/410 seen; awaiting the recheck
+
+
 def select_auto_tailor_candidates(conn, profile: str, min_score: int,
                                   min_filter_score: float, limit: int):
     """Live, untailored, undismissed 'new' jobs passing BOTH dashboard numbers:
     the effective (knockout-gated) blended score AND the Filter Match judge
     score. filter_score IS NULL (unjudged, or the '{}' filter_json sentinel)
     fails `>= min_filter_score` under SQL three-valued logic — intentionally
-    ineligible. auto_tailor_exempt marks the pre-feature grandfather snapshot;
-    auto_tailor_attempts >= 2 drops jobs whose auto-tailor keeps failing.
+    ineligible. auto_tailor_exempt (any nonzero: grandfather snapshot or
+    dead-posting marker) drops the row; auto_tailor_attempts >= 2 drops jobs
+    whose auto-tailor keeps failing.
     Manual tailoring from the dashboard still works for all of them."""
     return conn.execute(
         f"""SELECT id, url, title, company FROM jobs
@@ -1169,6 +1238,63 @@ def _bump_auto_tailor_attempts(conn, job_id: int) -> None:
         "UPDATE jobs SET auto_tailor_attempts = COALESCE(auto_tailor_attempts, 0) + 1 "
         "WHERE id = ?", (job_id,))
     conn.commit()
+
+
+def _mark_suspected_dead_posting(conn, job_id: int) -> None:
+    """The posting URL answered 404/410 while extraction failed: drop the job
+    from auto-tailor selection NOW (on 2026-07-20 nine such rows crowded live
+    95-score jobs out of the batch for 2 runs while the attempts cap caught
+    up), but only provisionally — the same incident's 404s were the overnight
+    Workday window, not real delistings, so no attempt budget is burned and
+    the verdict waits for the next run's recheck. Auto path only — the
+    dashboard's manual ✂ button still works on these rows."""
+    conn.execute(
+        "UPDATE jobs SET auto_tailor_exempt = ? WHERE id = ?",
+        (AUTO_TAILOR_EXEMPT_DEAD_SUSPECTED, job_id))
+    conn.commit()
+
+
+def _recheck_suspected_dead_postings(conn, profile: str) -> None:
+    """Second, temporally independent look at suspected-dead rows, run before
+    every selection. The 02:30/13:00 schedule puts ~10h between the failure
+    that raised the suspicion and this probe, so a transient overnight-window
+    404 cannot produce both observations:
+      2xx     -> the posting is alive: clear the marker (the row competes in
+                 THIS run's selection again);
+      404/410 -> second independent observation: confirmed dead, permanent;
+      else    -> still ambiguous (bot-block, 5xx, network error): stay
+                 suspected — out of selection, rechecked next run.
+    Cost: one plain GET per suspected row of this profile, no LLM spend."""
+    from resume_tailor.jd_extractor import _GONE_STATUSES, _probe_posting_status
+    rows = conn.execute(
+        """SELECT id, url FROM jobs
+           WHERE profile = ? AND auto_tailor_exempt = ?
+             AND status = 'new' AND (dismissed IS NULL OR dismissed = 0)
+             AND tailored_at IS NULL""",
+        (profile, AUTO_TAILOR_EXEMPT_DEAD_SUSPECTED)).fetchall()
+    for row in rows:
+        status = _probe_posting_status(row["url"])
+        if status is not None and 200 <= status < 300:
+            conn.execute(
+                "UPDATE jobs SET auto_tailor_exempt = NULL WHERE id = ?",
+                (row["id"],))
+            conn.commit()
+            logger.info(
+                "Auto-tailor: job %d posting is alive (HTTP %d) — "
+                "suspected-dead marker cleared.", row["id"], status)
+        elif status in _GONE_STATUSES:
+            conn.execute(
+                "UPDATE jobs SET auto_tailor_exempt = ? WHERE id = ?",
+                (AUTO_TAILOR_EXEMPT_DEAD_POSTING, row["id"]))
+            conn.commit()
+            logger.info(
+                "Auto-tailor: job %d posting gone again (HTTP %d) — "
+                "confirmed dead, permanently exempt from auto-tailor.",
+                row["id"], status)
+        else:
+            logger.info(
+                "Auto-tailor: job %d recheck inconclusive (%s) — stays "
+                "suspected-dead.", row["id"], status)
 
 
 def _log_auto_tailor_abort(exc: Exception, errors_log: Optional[str],
@@ -1197,10 +1323,20 @@ def _classify_tailor_failure(exc: Exception, _gauth, _GHttpError) -> str:
                      pill self-exempts after 2 runs) AND abort the batch;
       'abort'      — Google auth (missing creds, refresh/transport, HTTP
                      401/403): systemic until re-auth; never burn budget;
+      'suspect'    — posting URL answered 404/410 in Step 1: mark
+                     suspected-dead (out of selection at once, no attempt
+                     spent) and continue; the next run's recheck clears or
+                     confirms it;
       'bump'       — job-specific; bump and continue with other candidates.
     """
+    # Importable whenever a pipeline exception exists to classify: both loops
+    # run only after resume_tailor.pipeline (which imports jd_extractor)
+    # imported successfully.
+    from resume_tailor.jd_extractor import JDPostingGoneError
     if isinstance(exc, ClaudeCLIError):
         return "abort_bump"
+    if isinstance(exc, JDPostingGoneError):
+        return "suspect"
     if isinstance(exc, (FileNotFoundError, _gauth.TransportError, _gauth.RefreshError)):
         return "abort"
     if isinstance(exc, _GHttpError):
@@ -1217,6 +1353,10 @@ def run_auto_tailor(conn, db_path: str, profile: str, at_cfg: dict,
     Each pipeline run costs Opus usage via the claude CLI, so max_per_run
     stays small. Failure taxonomy (2026-07-15 spec):
       - job-specific errors: bump auto_tailor_attempts, continue;
+      - JDPostingGoneError (posting URL answers 404/410): mark suspected-
+        dead instead of bumping — it stops crowding the batch after ONE run
+        and the next run's pre-selection recheck clears it (alive again) or
+        confirms it dead permanently — and continue;
       - ClaudeCLIError: bump the ACTIVE job AND abort — the error conflates
         systemic causes (CLI down/logged out) with payload-induced ones (RSS
         guard, non-JSON output), so the bump lets a poison-pill job
@@ -1240,6 +1380,10 @@ def run_auto_tailor(conn, db_path: str, profile: str, at_cfg: dict,
     # resume_tailor imported fine, so the google libs it depends on exist.
     import google.auth.exceptions as _gauth
     from googleapiclient.errors import HttpError as _GHttpError
+
+    # Suspected-dead rows get their second look BEFORE selection: cleared
+    # rows re-enter this very batch; confirmed ones become permanent.
+    _recheck_suspected_dead_postings(conn, profile)
 
     min_score = int(at_cfg.get("min_score", 60))
     min_filter = float(at_cfg.get("min_filter_score", 60))
@@ -1274,6 +1418,13 @@ def run_auto_tailor(conn, db_path: str, profile: str, at_cfg: dict,
             if action == "abort":
                 _log_auto_tailor_abort(exc, errors_log, job)
                 break
+            if action == "suspect":
+                _mark_suspected_dead_posting(conn, job["id"])
+                logger.warning(
+                    "Auto-tailor: job %d posting appears gone — suspected-"
+                    "dead, out of selection pending recheck: %s",
+                    job["id"], exc)
+                continue
             _bump_auto_tailor_attempts(conn, job["id"])
             logger.warning("Auto-tailor: failed for job %d: %s", job["id"], exc)
     return done
@@ -1376,6 +1527,12 @@ def _run_auto_tailor_parallel(conn, db_path: str, candidates, workers: int,
                         _abort_batch(exc, job, bump=True)
                     elif action == "abort":
                         _abort_batch(exc, job, bump=False)
+                    elif action == "suspect":
+                        _mark_suspected_dead_posting(conn, job["id"])
+                        logger.warning(
+                            "Auto-tailor: job %d posting appears gone — "
+                            "suspected-dead, out of selection pending "
+                            "recheck: %s", job["id"], exc)
                     else:
                         _bump_auto_tailor_attempts(conn, job["id"])
                         logger.warning("Auto-tailor: failed for job %d: %s",
@@ -2217,6 +2374,10 @@ Examples:
         conn, profile=args.profile,
         retention_days=int(config.get("retention", {}).get("expired_days", 180)),
     )
+    # Must run before scraping: ingest dedups by URL, and rows stored by
+    # pre-2026-07-20 scrapers carry legacy URL formats the fixed scrapers
+    # no longer emit (details in repair_legacy_job_urls).
+    repair_legacy_job_urls(conn, config.get("workday_tenants"))
 
     # Create a run record
     started_at = datetime.now().isoformat()

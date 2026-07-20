@@ -36,7 +36,7 @@ def test_smartrecruiters_extracts_salary_from_sections(monkeypatch):
         "ref": "https://jobs.smartrecruiters.com/x/9",
         "jobAd": {"sections": {"jobDescription": {"text": "Base pay $180K - $220K plus bonus."}}},
     }
-    job = s._parse_posting(posting, "Bosch")
+    job = s._parse_posting(posting, "Bosch", "BoschGroup")
     assert (job.salary_min, job.salary_max) == (180_000.0, 220_000.0)
 
 

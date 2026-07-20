@@ -708,3 +708,106 @@ def test_pipeline_sets_engine_log_context(monkeypatch):
         pipe.run_tailor_pipeline({"id": 15635, "url": "https://x/1"},
                                  db_path="/nonexistent")
     assert seen["ctx"] == 15635
+
+
+# ---------------------------------------------------------------------------
+# Stored-description fallback (2026-07-20): 9 LIVE Workday jobs failed Step 1
+# during the overnight window although jobs.description already held their
+# full sanitized JDs from the last scrape. Step 1 now falls back to that
+# stored text when URL extraction fails — but ONLY for the generic
+# JDExtractionError: JDPostingGoneError must keep propagating so auto-tailor's
+# suspect/confirm dead-posting machinery still sees it (a provably-delisted
+# job must never burn a full Opus tailor against stale text).
+# ---------------------------------------------------------------------------
+from resume_tailor.jd_extractor import JDExtractionError, JDPostingGoneError
+
+
+def _set_description(db, text):
+    conn = sqlite3.connect(str(db))
+    with conn:
+        conn.execute("UPDATE jobs SET description = ? WHERE id = 1", (text,))
+    conn.close()
+
+
+_SUBSTANTIAL_JD = (
+    "Own the AI roadmap. Partner with engineering and design. "
+    "Ship LLM-powered features. Define metrics and drive adoption. " * 4
+).strip()
+
+
+def test_pipeline_falls_back_to_stored_description(tmp_path, monkeypatch):
+    db = _seed_pipeline_db(tmp_path)
+    _patch_pipeline(monkeypatch, tmp_path)
+    monkeypatch.setattr(pipe, "MASTER_RESUME_CACHE", str(tmp_path / "c.txt"))
+    _set_description(db, _SUBSTANTIAL_JD)
+
+    def _board_down(url):
+        raise JDExtractionError("All extraction tiers failed")
+    monkeypatch.setattr(pipe, "extract_jd", _board_down)
+
+    seen = {}
+    def fake_extract_keywords(text):
+        seen["jd_text"] = text
+        return SimpleNamespace(exact_job_title="Senior PM, AI",
+                               priority_keywords=["genai"])
+    monkeypatch.setattr(pipe, "extract_keywords", fake_extract_keywords)
+
+    result = pipe.run_tailor_pipeline(
+        {"id": 1, "url": "https://x/1", "company": "Acme", "title": "Senior PM AI"},
+        db_path=str(db), progress=lambda m: None)
+
+    # The tailor ran to completion against the stored text...
+    assert result["google_doc_url"] == "https://docs.google.com/doc-123"
+    assert seen["jd_text"] == _SUBSTANTIAL_JD
+    # ...and the staleness risk is surfaced, not silent.
+    assert any("stored description" in w.lower() for w in result["warnings"])
+
+
+def test_pipeline_posting_gone_never_falls_back(tmp_path, monkeypatch):
+    db = _seed_pipeline_db(tmp_path)
+    _patch_pipeline(monkeypatch, tmp_path)
+    monkeypatch.setattr(pipe, "MASTER_RESUME_CACHE", str(tmp_path / "c.txt"))
+    _set_description(db, _SUBSTANTIAL_JD)   # present, but must not be used
+
+    def _gone(url):
+        raise JDPostingGoneError("Posting gone (HTTP 404)", status=404)
+    monkeypatch.setattr(pipe, "extract_jd", _gone)
+
+    with pytest.raises(JDPostingGoneError):
+        pipe.run_tailor_pipeline(
+            {"id": 1, "url": "https://x/1", "company": "Acme",
+             "title": "Senior PM AI"},
+            db_path=str(db), progress=lambda m: None)
+
+
+def test_pipeline_reraises_without_substantial_stored_description(
+        tmp_path, monkeypatch):
+    db = _seed_pipeline_db(tmp_path)
+    _patch_pipeline(monkeypatch, tmp_path)
+    monkeypatch.setattr(pipe, "MASTER_RESUME_CACHE", str(tmp_path / "c.txt"))
+    _set_description(db, "Apply now!")   # nav-snippet junk, not a real JD
+
+    def _board_down(url):
+        raise JDExtractionError("All extraction tiers failed")
+    monkeypatch.setattr(pipe, "extract_jd", _board_down)
+
+    with pytest.raises(JDExtractionError):
+        pipe.run_tailor_pipeline(
+            {"id": 1, "url": "https://x/1", "company": "Acme",
+             "title": "Senior PM AI"},
+            db_path=str(db), progress=lambda m: None)
+
+
+def test_load_stored_description_substantial_short_missing(tmp_path):
+    db = _seed_pipeline_db(tmp_path)
+    # NULL description → None
+    assert pipe._load_stored_description(str(db), 1) is None
+    # At/below the 200-char bar (Tier 2's own minimum) → None
+    _set_description(db, "x" * 200)
+    assert pipe._load_stored_description(str(db), 1) is None
+    # Substantial → returned stripped
+    _set_description(db, "  " + _SUBSTANTIAL_JD + "\n")
+    assert pipe._load_stored_description(str(db), 1) == _SUBSTANTIAL_JD
+    # Missing row / missing DB → None, never raises
+    assert pipe._load_stored_description(str(db), 999) is None
+    assert pipe._load_stored_description(str(tmp_path / "missing.db"), 1) is None

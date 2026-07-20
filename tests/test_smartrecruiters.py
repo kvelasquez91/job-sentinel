@@ -144,9 +144,9 @@ def test_local_title_passes_in_local_area_but_not_elsewhere(monkeypatch):
     remote_decoy = _local_posting("Director Digital Transformation", "Austin, TX")
     remote_pm_job = _posting("Senior Product Manager, AI Platform")
 
-    parsed_local = sc._parse_posting(local_job, "Test Co")
-    parsed_decoy = sc._parse_posting(remote_decoy, "Test Co")
-    parsed_remote_pm = sc._parse_posting(remote_pm_job, "Test Co")
+    parsed_local = sc._parse_posting(local_job, "Test Co", "TestCo")
+    parsed_decoy = sc._parse_posting(remote_decoy, "Test Co", "TestCo")
+    parsed_remote_pm = sc._parse_posting(remote_pm_job, "Test Co", "TestCo")
 
     assert parsed_local is not None
     assert parsed_local.location == "Springfield, IL"
@@ -174,7 +174,7 @@ def test_malformed_location_does_not_crash_for_filter_failing_title():
         "jobAd": {"sections": {}},
     }
 
-    result = sc._parse_posting(malformed_city_posting, "Test Co")  # must not raise
+    result = sc._parse_posting(malformed_city_posting, "Test Co", "TestCo")  # must not raise
 
     assert result is None
 
@@ -213,7 +213,7 @@ def test_parse_posting_fetches_description_when_list_omits_jobad(monkeypatch):
         "releasedDate": "2026-07-01T00:00:00Z",
     }
 
-    job = sc._parse_posting(posting, "Test Co")
+    job = sc._parse_posting(posting, "Test Co", "TestCo")
 
     assert job is not None
     assert "Own the AI product roadmap." in job.description
@@ -239,10 +239,74 @@ def test_parse_posting_uses_inline_jobad_without_fetch(monkeypatch):
         "jobAd": {"sections": {"jobDescription": {"text": "Inline description."}}},
     }
 
-    job = sc._parse_posting(posting, "Test Co")
+    job = sc._parse_posting(posting, "Test Co", "TestCo")
 
     assert job is not None
     assert job.description == "Inline description."
+
+
+# ---------------------------------------------------------------------------
+# Regression (2026-07-20): job links opened raw JSON. `ref` is the API
+# self-link (api.smartrecruiters.com/v1/...), NOT the posting page, but the
+# scraper stored it as the job URL — 33 rows shipped unclickable links to the
+# dashboard, and the tailor's Tier-1 extractor (which matches
+# jobs.smartrecruiters.com URLs) could never fire for them. The stored URL
+# must be the public page, built from the config company_id + posting id;
+# `ref` stays what it really is: the detail-fetch endpoint.
+# ---------------------------------------------------------------------------
+def test_parse_posting_stores_public_page_url_not_api_ref(monkeypatch):
+    patch_greenhouse_gates(monkeypatch)
+    sc = _scraper()
+    sc._fetch_job_ad = lambda ref: {}
+    posting = {
+        "name": "Product Manager, AI Platform",
+        "location": {"remote": True},
+        "ref": "https://api.smartrecruiters.com/v1/companies/TestCo/postings/744000137098590",
+        "id": "744000137098590",
+        "releasedDate": "2026-07-01T00:00:00Z",
+    }
+    job = sc._parse_posting(posting, "Test Co", "TestCo")
+    assert job is not None
+    assert job.url == "https://jobs.smartrecruiters.com/TestCo/744000137098590"
+
+
+def test_parse_posting_still_detail_fetches_via_api_ref(monkeypatch):
+    """The description detail fetch must keep using `ref` (the API URL) even
+    though the stored job URL is now the public page."""
+    patch_greenhouse_gates(monkeypatch)
+    sc = _scraper()
+    fetched = []
+
+    def fake_fetch_job_ad(ref):
+        fetched.append(ref)
+        return {"sections": {"jobDescription": {"text": "X"}}}
+
+    sc._fetch_job_ad = fake_fetch_job_ad
+    posting = {
+        "name": "Product Manager, AI Platform",
+        "location": {"remote": True},
+        "ref": "https://api.smartrecruiters.com/v1/companies/TestCo/postings/42",
+        "id": "42",
+        "releasedDate": "2026-07-01T00:00:00Z",
+    }
+    job = sc._parse_posting(posting, "Test Co", "TestCo")
+    assert job.url == "https://jobs.smartrecruiters.com/TestCo/42"
+    assert fetched == ["https://api.smartrecruiters.com/v1/companies/TestCo/postings/42"]
+
+
+def test_parse_posting_without_posting_id_is_dropped(monkeypatch):
+    """No posting id -> no public page URL can exist; drop the row rather
+    than regress to storing an API link."""
+    patch_greenhouse_gates(monkeypatch)
+    sc = _scraper()
+    sc._fetch_job_ad = lambda ref: {}
+    posting = {
+        "name": "Product Manager, AI Platform",
+        "location": {"remote": True},
+        "ref": "https://api.smartrecruiters.com/v1/companies/TestCo/postings/42",
+        "releasedDate": "2026-07-01T00:00:00Z",
+    }
+    assert sc._parse_posting(posting, "Test Co", "TestCo") is None
 
 
 def test_fetch_job_ad_failure_not_cached(monkeypatch):

@@ -193,8 +193,13 @@ class SmartRecruitersScraper(BaseScraper):
             self._detail_cache[ref_url] = job_ad
         return job_ad
 
-    def _parse_posting(self, posting: dict, company_name: str) -> Optional[JobPosting]:
-        """Parse a single SmartRecruiters posting into a JobPosting."""
+    def _parse_posting(self, posting: dict, company_name: str,
+                       company_id: str) -> Optional[JobPosting]:
+        """Parse a single SmartRecruiters posting into a JobPosting.
+
+        company_id is the config board slug (e.g. "BoschGroup") — it forms
+        the public posting-page URL, which is NOT anything the API returns:
+        the row's `ref` field is the API's JSON self-link."""
         title = (posting.get("name") or "").strip()
         if not title:
             return None
@@ -221,16 +226,17 @@ class SmartRecruitersScraper(BaseScraper):
                                        self._local_title_token_sets)):
             return None
 
-        # Job URL — SmartRecruiters returns the canonical URL in `ref`
-        job_url = posting.get("ref") or ""
-        if not job_url:
-            posting_id = posting.get("id") or ""
-            if posting_id:
-                job_url = (
-                    f"https://jobs.smartrecruiters.com/{posting_id}"
-                )
-        if not job_url:
+        # Job URL — the PUBLIC posting page, built from board slug + posting
+        # id. `ref` is the API's JSON self-link (api.smartrecruiters.com),
+        # not a page a human can read: storing it (pre-2026-07-20) gave the
+        # dashboard raw-JSON job links and kept the tailor's Tier-1
+        # smartrecruiters extractor (which parses jobs.smartrecruiters.com
+        # URLs) from ever firing. No posting id -> drop the row rather than
+        # regress to an API link.
+        posting_id = str(posting.get("id") or "").strip()
+        if not posting_id:
             return None
+        job_url = f"https://jobs.smartrecruiters.com/{company_id}/{posting_id}"
 
         date_posted = posting.get("releasedDate") or posting.get("createdOn")
         if date_posted and "T" in str(date_posted):
@@ -244,7 +250,7 @@ class SmartRecruitersScraper(BaseScraper):
         # jobAd, if present, is used directly with no extra fetch.
         job_ad = posting.get("jobAd")
         if job_ad is None and job_url not in self.known_description_urls:
-            job_ad = self._fetch_job_ad(posting.get("ref") or job_url)
+            job_ad = self._fetch_job_ad(posting.get("ref") or "")
         sections = (job_ad or {}).get("sections") or {}
         description = ""
         for section_key in ("jobDescription", "qualifications", "additionalInformation"):
@@ -301,7 +307,7 @@ class SmartRecruitersScraper(BaseScraper):
                 if len(jobs) >= self.max_results:
                     break
                 try:
-                    job = self._parse_posting(posting, company_name)
+                    job = self._parse_posting(posting, company_name, company_id)
                     if job:
                         jobs.append(job)
                 except Exception as e:

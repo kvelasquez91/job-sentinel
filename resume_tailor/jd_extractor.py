@@ -30,7 +30,8 @@ from tenacity import (
 
 import sys as _sys
 import os as _os
-_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+_REPO_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+_sys.path.insert(0, _REPO_ROOT)
 from claude_cli import run_claude, ClaudeCLIError
 
 from .config import TAILOR_MODEL
@@ -72,6 +73,18 @@ class JDExtractionError(Exception):
     """Raised when all extraction tiers fail."""
 
 
+class JDPostingGoneError(JDExtractionError):
+    """All tiers failed AND the posting URL itself answered HTTP 404/410 —
+    the posting is provably delisted, not merely unreadable. Retrying can
+    never succeed, so callers may stop immediately (auto-tailor exempts the
+    job from future selection; the dashboard's manual tailor still surfaces
+    it through the normal JDExtractionError handling)."""
+
+    def __init__(self, message: str, status: Optional[int] = None):
+        super().__init__(message)
+        self.status = status
+
+
 @dataclass
 class JobDescription:
     title: str
@@ -83,7 +96,7 @@ class JobDescription:
     qualifications: list = field(default_factory=list)
     keywords: list = field(default_factory=list)
     source_url: str = ""
-    extraction_tier: int = 0  # 1-4; useful for debugging
+    extraction_tier: int = 0  # 1-4 (5 = pipeline's stored-DB fallback); for debugging
 
 
 # ---------------------------------------------------------------------------
@@ -122,8 +135,11 @@ def _detect_platform(url: str) -> Optional[str]:
     before_sleep=before_sleep_log(logger, logging.WARNING),
     reraise=True,
 )
-def _get(url: str, **kwargs) -> requests.Response:
-    return requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, **kwargs)
+def _get(url: str, headers: Optional[dict] = None, **kwargs) -> requests.Response:
+    # Caller headers MERGE over the browser defaults (a plain **kwargs
+    # forwarding made every headers= call a TypeError — see test_jd_extractor).
+    return requests.get(url, headers={**HEADERS, **(headers or {})},
+                        timeout=REQUEST_TIMEOUT, **kwargs)
 
 
 def _clean_html(html: str) -> str:
@@ -266,38 +282,76 @@ def _extract_ashby(url: str) -> Optional[JobDescription]:
     )
 
 
+_WORKDAY_CONFIG_PATH = _os.path.join(_REPO_ROOT, "config.yaml")
+_workday_site_map_cache: Optional[dict] = None
+
+
+def _workday_site_map() -> dict:
+    """Tenant hostname → (company_slug, site_path) from config.yaml
+    workday_tenants — the same source scrapers/workday.py builds its
+    live-verified cxs URLs from. The site token is NOT derivable from our
+    own scraped pretty URLs (they carry only the locale: /en-US/job/...),
+    so config is the only reliable source. Cached per process; {} when
+    config is missing/unparseable (fresh or shared checkouts)."""
+    global _workday_site_map_cache
+    if _workday_site_map_cache is None:
+        mapping = {}
+        try:
+            import yaml
+            with open(_WORKDAY_CONFIG_PATH, encoding="utf-8") as fh:
+                cfg = yaml.safe_load(fh) or {}
+            for tenant in cfg.get("workday_tenants") or []:
+                host = (tenant.get("tenant_url") or "").strip().lower()
+                site_path = tenant.get("site_path")
+                if not host or not site_path:
+                    continue
+                slug = tenant.get("company_slug") or tenant.get("company", "").lower()
+                mapping[host] = (slug, site_path)
+        except Exception as exc:
+            logger.debug("workday_tenants unavailable from config: %s", exc)
+        _workday_site_map_cache = mapping
+    return _workday_site_map_cache
+
+
 def _extract_workday(url: str) -> Optional[JobDescription]:
     """
-    Workday URL: https://{company}.wd5.myworkdayjobs.com/.../{job_id}
+    Workday URL: https://{tenant}.wdN.myworkdayjobs.com/{locale?}/{site?}/job/{...}
     Internal CXS API returns JSON:
-      GET /wday/cxs/{company}/{site}/job/{externalId}/jobPostingDetails
-    The job path in the URL is usually the slug used in the API.
+      GET https://{host}/wday/cxs/{company_slug}/{site}/job/{job-path}
+    The site token comes from config.yaml workday_tenants (see
+    _workday_site_map); for tenants not in config we keep the historical
+    guess: the path segment before /job/ plus a /jobPostingDetails suffix.
     Falls back to HTML parsing if the JSON API is unreachable.
     """
-    # Extract company/tenant from the hostname
-    hostname_match = re.search(r"([\w-]+)\.wd\d+\.myworkdayjobs\.com", url)
-    if not hostname_match:
+    host = urlparse(url).netloc.lower()
+    if not host.endswith(".myworkdayjobs.com"):
         return None
 
-    company_slug = hostname_match.group(1)
+    company_slug = host.split(".")[0]
 
     # Try to extract job path from URL; Workday URLs look like:
+    # /en-US/job/Remote-USA/Senior-PM_JR-123456 (our scraped form) or
     # /External_Career_Site/job/Remote-USA/Senior-PM_JR-123456
     path = urlparse(url).path
     path_parts = [p for p in path.split("/") if p]
 
-    # Attempt the CXS API with the full path structure
-    # Pattern: /wday/cxs/{tenant}/{site}/job/{job-path}/jobPostingDetails
     api_candidates = []
     for i, part in enumerate(path_parts):
         if part.lower() in ("job", "jobs"):
-            site = path_parts[i - 1] if i > 0 else "External_Career_Site"
             job_path = "/".join(path_parts[i:])
-            api_url = (
-                f"https://{company_slug}.wd5.myworkdayjobs.com"
-                f"/wday/cxs/{company_slug}/{site}/{job_path}/jobPostingDetails"
+            configured = _workday_site_map().get(host)
+            if configured:
+                cfg_slug, cfg_site = configured
+                # Scraper-shaped detail URL (no suffix) — the form
+                # WorkdayScraper._detail_url fetches on every daily run.
+                api_candidates.append(
+                    f"https://{host}/wday/cxs/{cfg_slug}/{cfg_site}/{job_path}"
+                )
+            site_guess = path_parts[i - 1] if i > 0 else "External_Career_Site"
+            api_candidates.append(
+                f"https://{host}/wday/cxs/{company_slug}/{site_guess}"
+                f"/{job_path}/jobPostingDetails"
             )
-            api_candidates.append(api_url)
             break
 
     for api_url in api_candidates:
@@ -306,9 +360,18 @@ def _extract_workday(url: str) -> Optional[JobDescription]:
             if resp.status_code == 200:
                 data = resp.json()
                 details = data.get("jobPostingInfo", {})
-                desc_html = details.get("jobDescription", {}).get("content", "")
+                # cxs detail serves jobDescription as a plain HTML string;
+                # the legacy jobPostingDetails shape nests {"content": ...}.
+                desc = details.get("jobDescription") or ""
+                desc_html = desc.get("content", "") if isinstance(desc, dict) else desc
                 title = details.get("title") or details.get("jobTitle") or ""
-                location = details.get("primaryLocation", {}).get("descriptor") or ""
+                location = details.get("location") or ""
+                if isinstance(location, dict):
+                    location = location.get("descriptor") or ""
+                if not location:
+                    primary = details.get("primaryLocation")
+                    if isinstance(primary, dict):
+                        location = primary.get("descriptor") or ""
                 if desc_html or title:
                     return JobDescription(
                         title=title,
@@ -617,6 +680,30 @@ def _llm_cleanup(raw_text: str) -> Optional[str]:
 # Public entry point
 # ---------------------------------------------------------------------------
 
+# Statuses that prove the posting itself is gone. Deliberately excludes 403:
+# LinkedIn and Workday bot-blocking serve it for LIVE postings.
+_GONE_STATUSES = (404, 410)
+
+
+def _probe_posting_status(url: str) -> Optional[int]:
+    """Direct GET of the posting URL, returning its HTTP status code — or
+    None when there is no definitive answer (connection/timeout errors).
+
+    Runs only on the all-tiers-failed path: the tiers themselves swallow
+    HTTP status (each Tier 1 extractor catches its own HTTPError; Tier 2's
+    trafilatura.fetch_url returns None for any non-2xx), so without this
+    probe a delisted posting and a live page that merely resists extraction
+    raise the identical generic error. Deliberately no retries: an
+    inconclusive probe just leaves the caller on the retryable
+    JDExtractionError path, which is the safe default."""
+    try:
+        return requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT,
+                            allow_redirects=True).status_code
+    except requests.RequestException as exc:
+        logger.debug("Posting status probe failed for %s: %s", url, exc)
+        return None
+
+
 def extract_jd(url: str) -> JobDescription:
     """
     Main entry point. Attempts extraction in tier order:
@@ -668,7 +755,15 @@ def extract_jd(url: str) -> JobDescription:
             extraction_tier=tier,
         )
 
-    # Tier 4 — failed
+    # Tier 4 — failed. Distinguish "posting is provably gone" (URL answers
+    # 404/410) from "live page we couldn't extract": the former can never
+    # succeed on retry and callers handle it differently (auto-tailor
+    # exempts the job instead of burning attempt budget).
+    status = _probe_posting_status(url)
+    if status in _GONE_STATUSES:
+        raise JDPostingGoneError(
+            f"Posting gone (HTTP {status}) for URL: {url} — "
+            "the job appears delisted.", status=status)
     raise JDExtractionError(
         f"All extraction tiers failed for URL: {url}\n"
         "Hint: set extraction_tier=4 and supply manual_jd_text to proceed."

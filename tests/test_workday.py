@@ -506,6 +506,27 @@ def test_parse_posting_fetch_description_false_skips_network():
     assert job.description == ""
 
 
+def test_job_page_url_includes_career_site_segment():
+    """Regression (2026-07-20): _job_page_url built
+    https://{tenant}/en-US{externalPath} — NO career-site segment. Workday
+    answers that shape with "page not found" (often a literal HTTP 404), so
+    every dashboard ↗ link and every tailor Step-1 fetch pointed at a dead
+    page for ALL 1,578 workday rows. The canonical form is what Workday
+    itself advertises in jobPostingInfo.externalUrl:
+    https://{tenant_url}/{site_path}{externalPath} (no locale prefix)."""
+    sc = WorkdayScraper(WORKDAY_CONFIG)
+    tenant = {
+        "company": "Adobe",
+        "tenant_url": "adobe.wd5.myworkdayjobs.com",
+        "company_slug": "adobe",
+        "site_path": "external_experienced",
+    }
+    assert sc._job_page_url(tenant, "/job/San-Jose/PM_R168238") == (
+        "https://adobe.wd5.myworkdayjobs.com/external_experienced"
+        "/job/San-Jose/PM_R168238"
+    )
+
+
 def test_parse_posting_skips_fetch_for_urls_already_described():
     """Steady-state daily runs: a URL already stored WITH a description must
     not cost a detail GET again (main.py seeds known_description_urls)."""

@@ -16,6 +16,9 @@ from datetime import datetime
 from typing import Callable, Optional
 
 from resume_tailor.jd_extractor import (
+    JDExtractionError,
+    JDPostingGoneError,
+    JobDescription,
     extract_jd,
     get_token_usage as jd_get_token_usage,
     reset_token_usage as jd_reset_token_usage,
@@ -80,6 +83,32 @@ def _load_stored_must_haves(db_path: str, job_id) -> Optional[list]:
         return None
 
 
+# Same bar Tier 2 applies to generic extraction: anything at or under a short
+# paragraph is a nav/error snippet, not a real JD.
+_MIN_STORED_DESC_CHARS = 200
+
+
+def _load_stored_description(db_path: str, job_id) -> Optional[str]:
+    """The scraper's sanitized description for this job, or None.
+
+    jobs.description is HTML-stripped centrally (clean_description in
+    JobPosting.__post_init__), so it is directly usable as JD raw_text.
+    Best-effort: missing row, NULL, sub-paragraph snippets, and DB errors
+    all return None — the caller then re-raises the extraction error.
+    """
+    try:
+        conn = sqlite3.connect(db_path)
+        row = conn.execute(
+            "SELECT description FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        conn.close()
+        desc = (row[0] or "").strip() if row else ""
+        return desc if len(desc) > _MIN_STORED_DESC_CHARS else None
+    except Exception as exc:
+        logger.warning(
+            "Could not load stored description for job %s: %s", job_id, exc)
+        return None
+
+
 def run_tailor_pipeline(
     job: dict,
     db_path: str,
@@ -109,9 +138,42 @@ def run_tailor_pipeline(
         # tailor doesn't already have, so pass no inventory at all.
         inventory_text = ""
 
-    # Step 1 — Extract job description (raises JDExtractionError)
+    # Step 1 — Extract job description (raises JDExtractionError). When the
+    # posting URL is unreadable (2026-07-20: an overnight Workday window took
+    # out 9 LIVE jobs), fall back to the scraper's stored description — the
+    # exact text Filter Match judged, so grounding stays consistent. URL-first
+    # is deliberate: fresh text when the board is reachable, and the URL
+    # attempt is what detects dead postings. JDPostingGoneError therefore
+    # propagates un-fallen-back — auto-tailor's suspect/confirm machinery
+    # must see it, and a provably-delisted job must never burn a full tailor
+    # against stale text.
     progress("Step 1/10: Fetching job description from posting URL...")
-    jd = extract_jd(job_url)
+    jd_warnings: list = []
+    try:
+        jd = extract_jd(job_url)
+    except JDPostingGoneError:
+        raise
+    except JDExtractionError as extract_err:
+        stored_desc = _load_stored_description(db_path, job_id)
+        if not stored_desc:
+            raise
+        progress("Step 1/10: Posting URL unreadable — using the stored "
+                 "description from the last scrape...")
+        logger.warning(
+            "JD extraction failed for job %s (%s) — falling back to stored "
+            "description (%d chars)", job_id, extract_err, len(stored_desc))
+        jd = JobDescription(
+            title=title,
+            company=company,
+            location="",
+            raw_text=stored_desc,
+            source_url=job_url,
+            extraction_tier=5,   # stored-DB description (see jd_extractor tiers)
+        )
+        jd_warnings.append(
+            "Tailored from the stored description (posting URL was "
+            "unreadable) — text may be stale if the posting changed since "
+            "the last scrape.")
 
     effective_company = company or jd.company or "Unknown"
     effective_title = title or jd.title or "Unknown Role"
@@ -389,7 +451,8 @@ def run_tailor_pipeline(
         "keywords_matched": len(matched_keywords),
         "keywords_total": len(jd_analysis.priority_keywords),
         "issues": critical_issues,
-        "warnings": list(ats_result.warnings) + layout_warnings + must_have_warnings,
+        "warnings": jd_warnings + list(ats_result.warnings) + layout_warnings
+                    + must_have_warnings,
         "company": effective_company,
         "title": exact_title,
         "total_input_tokens": total_input,

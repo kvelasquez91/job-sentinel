@@ -588,6 +588,283 @@ def test_tailor_one_job_gates_on_abort_event():
     assert calls == []
 
 
+# ---------------------------------------------------------------------------
+# Dead-posting exclusion (2026-07-20): 9 Workday rows failing extraction with
+# HTTP 404 crowded live 95-score jobs out of the batch, burning 2 daily runs
+# each before the attempts cap dropped them. The extraction tiers all swallow
+# HTTP status (Tier 1 catches per-platform, trafilatura returns None on any
+# non-2xx), so extract_jd probes the posting URL on the all-tiers-failed path
+# and raises JDPostingGoneError only on 404/410.
+#
+# One 404 is NOT proof of death: that same incident's 404s came from the
+# 02:30-03:00 Workday overnight window (three tenants at once; every URL
+# answered 200 by afternoon). Hence two phases:
+#   probe 404/410 at failure time -> SUSPECTED (out of selection at once,
+#     no attempt burned);
+#   next run re-probes suspected rows before selecting: 2xx -> alive, marker
+#     cleared (competes again in that same run); 404/410 -> second
+#     independent observation (the 02:30/13:00 schedule puts ~10h between
+#     them) -> confirmed dead, permanent; else -> stay suspected.
+# ---------------------------------------------------------------------------
+import pytest
+
+from resume_tailor.jd_extractor import JDExtractionError, JDPostingGoneError
+
+
+def _exempt_value(conn, url):
+    return conn.execute(
+        "SELECT auto_tailor_exempt FROM jobs WHERE url = ?", (url,)).fetchone()[0]
+
+
+class _ProbeResp:
+    """Minimal stand-in for the requests.Response the status probe reads."""
+    def __init__(self, status_code):
+        self.status_code = status_code
+
+
+def _kill_tiers(monkeypatch, jd_ex):
+    """Force the all-tiers-failed path without network: the example.com URL
+    matches no Tier 1 platform and Tier 2 is stubbed to extract nothing."""
+    monkeypatch.setattr(jd_ex, "_extract_generic", lambda url: None)
+
+
+def test_posting_gone_is_a_jd_extraction_error():
+    """dashboard/app.py's manual tailor catches JDExtractionError for its
+    friendly error card — the dead-posting subclass must stay inside that
+    contract so the manual ✂ button keeps working on exempted rows."""
+    assert issubclass(JDPostingGoneError, JDExtractionError)
+
+
+def test_extract_jd_raises_posting_gone_on_404(monkeypatch):
+    import resume_tailor.jd_extractor as jd_ex
+    _kill_tiers(monkeypatch, jd_ex)
+    monkeypatch.setattr(jd_ex.requests, "get", lambda *a, **k: _ProbeResp(404))
+    with pytest.raises(JDPostingGoneError) as ei:
+        jd_ex.extract_jd("https://example.com/careers/123")
+    assert ei.value.status == 404
+
+
+def test_extract_jd_raises_posting_gone_on_410(monkeypatch):
+    import resume_tailor.jd_extractor as jd_ex
+    _kill_tiers(monkeypatch, jd_ex)
+    monkeypatch.setattr(jd_ex.requests, "get", lambda *a, **k: _ProbeResp(410))
+    with pytest.raises(JDPostingGoneError) as ei:
+        jd_ex.extract_jd("https://example.com/careers/123")
+    assert ei.value.status == 410
+
+
+def test_extract_jd_generic_error_when_page_is_live(monkeypatch):
+    """200 = the posting exists; extraction merely failed. That stays on the
+    retryable generic path (bump-and-retry), never the exempt path."""
+    import resume_tailor.jd_extractor as jd_ex
+    _kill_tiers(monkeypatch, jd_ex)
+    monkeypatch.setattr(jd_ex.requests, "get", lambda *a, **k: _ProbeResp(200))
+    with pytest.raises(JDExtractionError) as ei:
+        jd_ex.extract_jd("https://example.com/careers/123")
+    assert not isinstance(ei.value, JDPostingGoneError)
+
+
+def test_extract_jd_403_is_not_provably_gone(monkeypatch):
+    """403 is ambiguous — LinkedIn and Workday bot-blocking serve it for LIVE
+    postings — so it must not trigger the permanent exemption."""
+    import resume_tailor.jd_extractor as jd_ex
+    _kill_tiers(monkeypatch, jd_ex)
+    monkeypatch.setattr(jd_ex.requests, "get", lambda *a, **k: _ProbeResp(403))
+    with pytest.raises(JDExtractionError) as ei:
+        jd_ex.extract_jd("https://example.com/careers/123")
+    assert not isinstance(ei.value, JDPostingGoneError)
+
+
+def test_extract_jd_generic_error_when_probe_network_fails(monkeypatch):
+    """A connection failure proves nothing about the posting: no exemption."""
+    import resume_tailor.jd_extractor as jd_ex
+    _kill_tiers(monkeypatch, jd_ex)
+
+    def _dns_down(*a, **k):
+        raise jd_ex.requests.ConnectionError("dns down")
+
+    monkeypatch.setattr(jd_ex.requests, "get", _dns_down)
+    with pytest.raises(JDExtractionError) as ei:
+        jd_ex.extract_jd("https://example.com/careers/123")
+    assert not isinstance(ei.value, JDPostingGoneError)
+
+
+def test_dead_posting_suspected_immediately_and_continues(tmp_path, monkeypatch):
+    """A 404 at failure time marks the job suspected-dead in ONE run — no
+    attempt budget burned, no batch abort, and it leaves selection at once."""
+    conn = _db(tmp_path)
+    calls = []
+
+    def fake_pipeline(job, db_path, progress=None):
+        calls.append(job["title"])
+        if job["title"] == "Winner A":
+            raise JDPostingGoneError(
+                "Posting gone (HTTP 404) for URL: u1", status=404)
+        return {"ats_score": 90, "google_doc_url": "https://d/x"}
+
+    import resume_tailor.pipeline as pipe
+    monkeypatch.setattr(pipe, "run_tailor_pipeline", fake_pipeline)
+    done = main_mod.run_auto_tailor(conn, str(tmp_path / "jobs.db"), "testuser", _CFG)
+    assert calls == ["Winner A", "Winner B"]   # dead job must not abort the batch
+    assert done == 1
+    assert _attempts(conn, "u1") == 0          # suspect INSTEAD of bump
+    assert _exempt_value(conn, "u1") == main_mod.AUTO_TAILOR_EXEMPT_DEAD_SUSPECTED
+    assert "Winner A" not in [r["title"] for r in _select(conn)]
+
+
+def test_dead_markers_excluded_from_selection_and_distinct(tmp_path):
+    conn = _db(tmp_path)
+    conn.executemany(
+        "INSERT INTO jobs (title, url, score, filter_score, status, company, "
+        "profile, auto_tailor_exempt) VALUES (?, ?, 96, 96.0, 'new', 'Co', "
+        "'testuser', ?)",
+        [("Confirmed dead", "u15", main_mod.AUTO_TAILOR_EXEMPT_DEAD_POSTING),
+         ("Suspected dead", "u16", main_mod.AUTO_TAILOR_EXEMPT_DEAD_SUSPECTED)])
+    conn.commit()
+    titles = [r["title"] for r in _select(conn)]
+    assert "Confirmed dead" not in titles
+    assert "Suspected dead" not in titles
+    # Distinct values keep "why is this row exempt" answerable in sqlite.
+    assert len({main_mod.AUTO_TAILOR_EXEMPT_GRANDFATHERED,
+                main_mod.AUTO_TAILOR_EXEMPT_DEAD_POSTING,
+                main_mod.AUTO_TAILOR_EXEMPT_DEAD_SUSPECTED}) == 3
+
+
+def test_parallel_dead_posting_suspected_without_bump(tmp_path, monkeypatch):
+    """Parallel loop: a dead posting is marked suspected on the main thread
+    while the sibling candidates run to completion undisturbed."""
+    conn = _db(tmp_path)
+    _ok_preflight(monkeypatch)
+
+    def fake_pipeline(job, db_path, progress=None):
+        if job["title"] == "Winner A":
+            raise JDPostingGoneError(
+                "Posting gone (HTTP 404) for URL: u1", status=404)
+        return {"ats_score": 90, "google_doc_url": "https://d/x"}
+
+    import resume_tailor.pipeline as pipe
+    monkeypatch.setattr(pipe, "run_tailor_pipeline", fake_pipeline)
+    done = main_mod.run_auto_tailor(
+        conn, str(tmp_path / "jobs.db"), "testuser", _CFG_PAR)
+    assert done == 2
+    assert _attempts(conn, "u1") == 0
+    assert _exempt_value(conn, "u1") == main_mod.AUTO_TAILOR_EXEMPT_DEAD_SUSPECTED
+    assert _exempt_value(conn, "u2") is None
+    assert _exempt_value(conn, "u3") is None
+
+
+def _add_suspected(conn, title="Revived", url="u20", score=96,
+                   exempt=None, profile="testuser"):
+    conn.execute(
+        "INSERT INTO jobs (title, url, score, filter_score, status, company, "
+        "profile, auto_tailor_exempt) VALUES (?, ?, ?, 96.0, 'new', 'Co', ?, ?)",
+        (title, url, score,
+         profile, exempt or main_mod.AUTO_TAILOR_EXEMPT_DEAD_SUSPECTED))
+    conn.commit()
+
+
+def test_suspected_dead_cleared_and_reenters_same_run_when_alive(tmp_path, monkeypatch):
+    """The pre-selection recheck: a suspected row whose URL answers 2xx again
+    (the 2026-07-20 case — overnight-window 404s on LIVE postings) is cleared
+    and competes in THAT run's selection immediately."""
+    import resume_tailor.jd_extractor as jd_ex
+    conn = _db(tmp_path)
+    _add_suspected(conn, title="Revived", url="u20", score=96)
+    probed = []
+
+    def fake_probe(url):
+        probed.append(url)
+        return 200
+
+    monkeypatch.setattr(jd_ex, "_probe_posting_status", fake_probe)
+    calls = []
+
+    def fake_pipeline(job, db_path, progress=None):
+        calls.append(job["title"])
+        return {"ats_score": 90, "google_doc_url": "https://d/x"}
+
+    import resume_tailor.pipeline as pipe
+    monkeypatch.setattr(pipe, "run_tailor_pipeline", fake_pipeline)
+    done = main_mod.run_auto_tailor(conn, str(tmp_path / "jobs.db"), "testuser", _CFG)
+    assert probed == ["u20"]
+    assert _exempt_value(conn, "u20") is None
+    # Revived (96) outranks Winner A (95): it must be IN this run's batch.
+    assert done == 2
+    assert calls == ["Revived", "Winner A"]
+
+
+def test_suspected_dead_confirmed_on_second_404(tmp_path, monkeypatch):
+    """404 again on the recheck (~10h after the first observation under the
+    02:30/13:00 schedule) is two independent observations: permanent."""
+    import resume_tailor.jd_extractor as jd_ex
+    conn = _db(tmp_path)
+    _add_suspected(conn, title="Truly dead", url="u21", score=96)
+    monkeypatch.setattr(jd_ex, "_probe_posting_status", lambda url: 404)
+
+    calls = []
+
+    def fake_pipeline(job, db_path, progress=None):
+        calls.append(job["title"])
+        return {"ats_score": 90, "google_doc_url": "https://d/x"}
+
+    import resume_tailor.pipeline as pipe
+    monkeypatch.setattr(pipe, "run_tailor_pipeline", fake_pipeline)
+    main_mod.run_auto_tailor(conn, str(tmp_path / "jobs.db"), "testuser", _CFG)
+    assert _exempt_value(conn, "u21") == main_mod.AUTO_TAILOR_EXEMPT_DEAD_POSTING
+    assert "Truly dead" not in calls
+
+
+@pytest.mark.parametrize("probe_result", [None, 403, 503])
+def test_suspected_dead_stays_suspected_on_ambiguous_probe(
+        tmp_path, monkeypatch, probe_result):
+    """Network errors, bot-blocks and 5xx prove nothing either way: the row
+    stays suspected (out of selection) and is rechecked next run."""
+    import resume_tailor.jd_extractor as jd_ex
+    conn = _db(tmp_path)
+    _add_suspected(conn, title="Ambiguous", url="u22", score=96)
+    monkeypatch.setattr(jd_ex, "_probe_posting_status", lambda url: probe_result)
+
+    calls = []
+
+    def fake_pipeline(job, db_path, progress=None):
+        calls.append(job["title"])
+        return {"ats_score": 90, "google_doc_url": "https://d/x"}
+
+    import resume_tailor.pipeline as pipe
+    monkeypatch.setattr(pipe, "run_tailor_pipeline", fake_pipeline)
+    main_mod.run_auto_tailor(conn, str(tmp_path / "jobs.db"), "testuser", _CFG)
+    assert _exempt_value(conn, "u22") == main_mod.AUTO_TAILOR_EXEMPT_DEAD_SUSPECTED
+    assert "Ambiguous" not in calls
+
+
+def test_recheck_probes_only_suspected_rows_of_this_profile(tmp_path, monkeypatch):
+    """Grandfathered (1) and confirmed-dead (2) rows are never re-probed, and
+    another profile's suspected rows belong to that profile's run."""
+    import resume_tailor.jd_extractor as jd_ex
+    conn = _db(tmp_path)
+    _add_suspected(conn, title="Grandfathered", url="u23",
+                   exempt=main_mod.AUTO_TAILOR_EXEMPT_GRANDFATHERED)
+    _add_suspected(conn, title="Confirmed", url="u24",
+                   exempt=main_mod.AUTO_TAILOR_EXEMPT_DEAD_POSTING)
+    _add_suspected(conn, title="Other profile", url="u25", profile="other")
+    _add_suspected(conn, title="Mine", url="u26")
+    probed = []
+
+    def fake_probe(url):
+        probed.append(url)
+        return None
+
+    monkeypatch.setattr(jd_ex, "_probe_posting_status", fake_probe)
+
+    def fake_pipeline(job, db_path, progress=None):
+        return {"ats_score": 90, "google_doc_url": "https://d/x"}
+
+    import resume_tailor.pipeline as pipe
+    monkeypatch.setattr(pipe, "run_tailor_pipeline", fake_pipeline)
+    main_mod.run_auto_tailor(conn, str(tmp_path / "jobs.db"), "testuser", _CFG)
+    assert probed == ["u26"]
+
+
 def test_parallel_mainthread_crash_propagates_promptly(tmp_path, monkeypatch):
     """An exception escaping the result loop (e.g. sqlite failure in a bump)
     must propagate — with the escape hatch cancelling the queue rather than
